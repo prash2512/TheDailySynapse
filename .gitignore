@@ -4,3 +4,7 @@ discussion_log.md
 detailed_design.md
 phase_2_plan.md
 progress_checkpoint.md
+
+# Build artifacts
+bin/
+synapse.db

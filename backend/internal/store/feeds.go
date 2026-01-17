@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"TheDailySynapse/backend/internal/core"
+	"DailySynapse/backend/internal/core"
 )
 
 type Queries struct {

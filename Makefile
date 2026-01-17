@@ -1,10 +1,14 @@
-.PHONY: build run test clean docker-build
+.PHONY: build run test clean fmt docker-build
 
 BINARY_NAME=synapse
 BACKEND_DIR=./backend
 BIN_DIR=./bin
 
-build:
+fmt:
+	@echo "Formatting code..."
+	@gofmt -w $(BACKEND_DIR)
+
+build: fmt
 	@echo "Building backend..."
 	@cd $(BACKEND_DIR) && go build -o ../$(BIN_DIR)/${BINARY_NAME} ./cmd/synapse
 
