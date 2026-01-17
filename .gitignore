@@ -6,3 +6,4 @@ synapse.db
 DESIGN.md
 PROGRESS.md
 DECISIONS.md
+.env
