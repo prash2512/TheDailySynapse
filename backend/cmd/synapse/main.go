@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"DailySynapse/backend/internal/store"
+	"dailysynapse/backend/internal/store"
 )
 
 func main() {
