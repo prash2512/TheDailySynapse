@@ -77,3 +77,86 @@ func (q *Queries) DeleteArticlesByFeedID(ctx context.Context, feedID int64) erro
 	}
 	return nil
 }
+
+func (q *Queries) GetUnscoredArticles(ctx context.Context, limit int) ([]core.Article, error) {
+	query := `
+		SELECT a.id, a.feed_id, a.title, a.url, a.published_at, ac.content
+		FROM articles a
+		JOIN article_content ac ON a.id = ac.article_id
+		WHERE a.quality_rank IS NULL
+		ORDER BY a.published_at DESC
+		LIMIT ?
+	`
+	rows, err := q.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying unscored articles: %w", err)
+	}
+	defer rows.Close()
+
+	var articles []core.Article
+	for rows.Next() {
+		var a core.Article
+		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt, &a.Content); err != nil {
+			return nil, fmt.Errorf("scanning article: %w", err)
+		}
+		articles = append(articles, a)
+	}
+	return articles, nil
+}
+
+func (q *Queries) UpdateArticleScore(ctx context.Context, id int64, rank int, summary, justification, model string, tags []string) error {
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Update Article Metadata
+	query := `
+		UPDATE articles
+		SET quality_rank = ?, summary = ?
+		WHERE id = ?
+	`
+	if _, err := tx.ExecContext(ctx, query, rank, summary, id); err != nil {
+		return fmt.Errorf("updating article score: %w", err)
+	}
+
+	// Update Judge Model
+	if _, err := tx.ExecContext(ctx, `UPDATE article_content SET judge_model = ? WHERE article_id = ?`, model, id); err != nil {
+		return fmt.Errorf("updating judge model: %w", err)
+	}
+
+	// Update Tags (Delete old, insert new)
+	if _, err := tx.ExecContext(ctx, `DELETE FROM article_tags WHERE article_id = ?`, id); err != nil {
+		return fmt.Errorf("clearing tags: %w", err)
+	}
+
+	// Insert Tags
+	// First ensure tags exist in 'tags' table
+	insertTag := `INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET id=id RETURNING id`
+	linkTag := `INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?)`
+
+	stmtTag, err := tx.PrepareContext(ctx, insertTag)
+	if err != nil {
+		return err
+	}
+	defer stmtTag.Close()
+
+	stmtLink, err := tx.PrepareContext(ctx, linkTag)
+	if err != nil {
+		return err
+	}
+	defer stmtLink.Close()
+
+	for _, tag := range tags {
+		var tagID int64
+		if err := stmtTag.QueryRowContext(ctx, tag).Scan(&tagID); err != nil {
+			return fmt.Errorf("processing tag %s: %w", tag, err)
+		}
+		if _, err := stmtLink.ExecContext(ctx, id, tagID); err != nil {
+			return fmt.Errorf("linking tag %s: %w", tag, err)
+		}
+	}
+
+	return tx.Commit()
+}
