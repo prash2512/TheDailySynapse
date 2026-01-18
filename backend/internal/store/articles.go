@@ -50,3 +50,12 @@ func (q *Queries) DeleteOldArticles(ctx context.Context, horizon time.Time) (int
 
 	return res.RowsAffected()
 }
+
+func (q *Queries) DeleteArticlesByFeedID(ctx context.Context, feedID int64) error {
+	query := `DELETE FROM articles WHERE feed_id = ?`
+	_, err := q.db.ExecContext(ctx, query, feedID)
+	if err != nil {
+		return fmt.Errorf("executing delete articles by feed id: %w", err)
+	}
+	return nil
+}

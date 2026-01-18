@@ -28,6 +28,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /sync", s.handleSync)
 	mux.HandleFunc("GET /feeds", s.handleGetFeeds)
 	mux.HandleFunc("POST /feeds", s.handleCreateFeed)
+	mux.HandleFunc("DELETE /feeds/{id}", s.handleDeleteFeed)
 
 	return mux
 }

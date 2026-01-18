@@ -6,6 +6,7 @@ type Feed struct {
 	ID           int64
 	URL          string
 	Name         string
+	Status       string
 	Etag         string
 	LastModified string
 	LastSyncedAt time.Time

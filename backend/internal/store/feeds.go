@@ -18,8 +18,8 @@ func NewQueries(db *sql.DB) *Queries {
 
 func (q *Queries) CreateFeed(url string, name string) (core.Feed, error) {
 	stmt, err := q.db.Prepare(`
-		INSERT INTO feeds (url, name, last_synced_at)
-		VALUES (?, ?, ?);
+		INSERT INTO feeds (url, name, status, last_synced_at)
+		VALUES (?, ?, 'active', ?);
 	`)
 	if err != nil {
 		return core.Feed{}, fmt.Errorf("could not prepare statement: %w", err)
@@ -41,6 +41,7 @@ func (q *Queries) CreateFeed(url string, name string) (core.Feed, error) {
 		ID:           id,
 		URL:          url,
 		Name:         name,
+		Status:       "active",
 		LastSyncedAt: initialSyncTime,
 	}
 
@@ -70,8 +71,41 @@ func (q *Queries) DeleteFeed(id int64) error {
 	return nil
 }
 
+func (q *Queries) MarkFeedForDeletion(id int64) error {
+	stmt, err := q.db.Prepare("UPDATE feeds SET status = 'pending_deletion' WHERE id = ?;")
+	if err != nil {
+		return fmt.Errorf("could not prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	res, err := stmt.Exec(id)
+	if err != nil {
+		return fmt.Errorf("could not execute statement: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("could not get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no feed with id %d found", id)
+	}
+
+	return nil
+}
+
+func (q *Queries) GetFeedsPendingDeletion() ([]core.Feed, error) {
+	rows, err := q.db.Query("SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds WHERE status = 'pending_deletion';")
+	if err != nil {
+		return nil, fmt.Errorf("could not query feeds pending deletion: %w", err)
+	}
+	defer rows.Close()
+
+	return q.scanFeeds(rows)
+}
+
 func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
-	rows, err := q.db.Query("SELECT id, url, name, etag, last_modified, last_synced_at FROM feeds ORDER BY name;")
+	rows, err := q.db.Query("SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds ORDER BY name;")
 	if err != nil {
 		return nil, fmt.Errorf("could not query feeds: %w", err)
 	}
@@ -81,7 +115,7 @@ func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
 }
 
 func (q *Queries) GetFeedsToSync(limit int) ([]core.Feed, error) {
-	rows, err := q.db.Query("SELECT id, url, name, etag, last_modified, last_synced_at FROM feeds ORDER BY last_synced_at ASC LIMIT ?;", limit)
+	rows, err := q.db.Query("SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds WHERE status = 'active' ORDER BY last_synced_at ASC LIMIT ?;", limit)
 	if err != nil {
 		return nil, fmt.Errorf("could not query feeds to sync: %w", err)
 	}
@@ -96,7 +130,7 @@ func (q *Queries) scanFeeds(rows *sql.Rows) ([]core.Feed, error) {
 		var feed core.Feed
 		var etag, lastMod sql.NullString
 
-		if err := rows.Scan(&feed.ID, &feed.URL, &feed.Name, &etag, &lastMod, &feed.LastSyncedAt); err != nil {
+		if err := rows.Scan(&feed.ID, &feed.URL, &feed.Name, &feed.Status, &etag, &lastMod, &feed.LastSyncedAt); err != nil {
 			return nil, fmt.Errorf("could not scan feed row: %w", err)
 		}
 

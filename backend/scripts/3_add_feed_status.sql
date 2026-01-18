@@ -1,0 +1,1 @@
+ALTER TABLE feeds ADD COLUMN status TEXT DEFAULT 'active';

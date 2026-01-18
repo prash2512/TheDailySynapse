@@ -48,8 +48,10 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 
 	ticker := time.NewTicker(interval)
 	cleanupTicker := time.NewTicker(24 * time.Hour)
+	purgeTicker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	defer cleanupTicker.Stop()
+	defer purgeTicker.Stop()
 
 	s.TriggerSync(ctx, 20)
 
@@ -61,6 +63,8 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 			return
 		case <-ticker.C:
 			s.TriggerSync(ctx, 20)
+		case <-purgeTicker.C:
+			s.purgeDeletedFeeds(ctx)
 		case <-cleanupTicker.C:
 			s.runCleanup(ctx)
 		}
@@ -86,7 +90,32 @@ func (s *Syncer) TriggerSync(ctx context.Context, limit int) error {
 	return nil
 }
 
+func (s *Syncer) purgeDeletedFeeds(ctx context.Context) {
+	feeds, err := s.store.GetFeedsPendingDeletion()
+	if err != nil {
+		log.Printf("Failed to fetch feeds pending deletion: %v", err)
+		return
+	}
+
+	for _, feed := range feeds {
+		log.Printf("Purging feed %s (ID: %d)...", feed.Name, feed.ID)
+
+		if err := s.store.DeleteArticlesByFeedID(ctx, feed.ID); err != nil {
+			log.Printf("Failed to delete articles for feed %d: %v", feed.ID, err)
+			continue
+		}
+
+		if err := s.store.DeleteFeed(feed.ID); err != nil {
+			log.Printf("Failed to delete feed %d: %v", feed.ID, err)
+		} else {
+			log.Printf("Successfully purged feed %s", feed.Name)
+		}
+	}
+}
+
 func (s *Syncer) runCleanup(ctx context.Context) {
+	s.purgeDeletedFeeds(ctx)
+
 	horizon := time.Now().AddDate(0, 0, -30)
 
 	count, err := s.store.DeleteOldArticles(ctx, horizon)
