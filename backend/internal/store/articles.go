@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"dailysynapse/backend/internal/core"
 )
@@ -37,4 +38,16 @@ func (q *Queries) CreateArticle(ctx context.Context, article core.Article) (int6
 	}
 
 	return id, nil
+}
+
+// DeleteOldArticles removes articles older than the horizon that are NOT marked as read_later.
+func (q *Queries) DeleteOldArticles(ctx context.Context, horizon time.Time) (int64, error) {
+	query := `DELETE FROM articles WHERE published_at < ? AND read_later = 0`
+	
+	res, err := q.db.ExecContext(ctx, query, horizon)
+	if err != nil {
+		return 0, fmt.Errorf("executing delete old articles: %w", err)
+	}
+
+	return res.RowsAffected()
 }

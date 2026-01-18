@@ -47,7 +47,9 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 	}
 
 	ticker := time.NewTicker(interval)
+	cleanupTicker := time.NewTicker(24 * time.Hour) // Run cleanup daily
 	defer ticker.Stop()
+	defer cleanupTicker.Stop()
 
 	s.TriggerSync(ctx)
 
@@ -59,6 +61,8 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 			return
 		case <-ticker.C:
 			s.TriggerSync(ctx)
+		case <-cleanupTicker.C:
+			s.runCleanup(ctx)
 		}
 	}
 }
@@ -80,6 +84,21 @@ func (s *Syncer) TriggerSync(ctx context.Context) error {
 	}()
 	
 	return nil
+}
+
+func (s *Syncer) runCleanup(ctx context.Context) {
+	// Keep articles for 30 days to allow for some history/search, 
+	// even if the "Daily" view is only 7 days.
+	horizon := time.Now().AddDate(0, 0, -30)
+	
+	count, err := s.store.DeleteOldArticles(ctx, horizon)
+	if err != nil {
+		log.Printf("Cleanup failed: %v", err)
+		return
+	}
+	if count > 0 {
+		log.Printf("Cleanup: Deleted %d old articles", count)
+	}
 }
 
 func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
