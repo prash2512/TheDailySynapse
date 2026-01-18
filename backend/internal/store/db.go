@@ -56,8 +56,6 @@ func runMigrations(db *sql.DB) error {
 		return fmt.Errorf("could not list migration files: %w", err)
 	}
 
-	// We need to sort by VERSION number, not filename string
-	// "10_x.sql" comes before "2_x.sql" in string sort, but after in number sort.
 	type migration struct {
 		version int
 		file    string

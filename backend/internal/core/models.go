@@ -13,17 +13,18 @@ type Feed struct {
 }
 
 type Article struct {
-	ID          int64
-	FeedID      int64
-	Title       string
-	URL         string
-	PublishedAt time.Time
-	Content     string
-	QualityRank int
-	Summary     string
-	JudgeModel  string
-	IsRead      bool
-	ReadLater   bool
+	ID            int64
+	FeedID        int64
+	Title         string
+	URL           string
+	PublishedAt   time.Time
+	Content       string
+	QualityRank   int
+	Summary       string
+	Justification string
+	JudgeModel    string
+	IsRead        bool
+	ReadLater     bool
 }
 
 type Tag struct {

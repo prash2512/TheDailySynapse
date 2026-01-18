@@ -111,28 +111,23 @@ func (q *Queries) UpdateArticleScore(ctx context.Context, id int64, rank int, su
 	}
 	defer tx.Rollback()
 
-	// Update Article Metadata
 	query := `
 		UPDATE articles
-		SET quality_rank = ?, summary = ?
+		SET quality_rank = ?, summary = ?, justification = ?
 		WHERE id = ?
 	`
-	if _, err := tx.ExecContext(ctx, query, rank, summary, id); err != nil {
+	if _, err := tx.ExecContext(ctx, query, rank, summary, justification, id); err != nil {
 		return fmt.Errorf("updating article score: %w", err)
 	}
 
-	// Update Judge Model
 	if _, err := tx.ExecContext(ctx, `UPDATE article_content SET judge_model = ? WHERE article_id = ?`, model, id); err != nil {
 		return fmt.Errorf("updating judge model: %w", err)
 	}
 
-	// Update Tags (Delete old, insert new)
 	if _, err := tx.ExecContext(ctx, `DELETE FROM article_tags WHERE article_id = ?`, id); err != nil {
 		return fmt.Errorf("clearing tags: %w", err)
 	}
 
-	// Insert Tags
-	// First ensure tags exist in 'tags' table
 	insertTag := `INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET id=id RETURNING id`
 	linkTag := `INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?)`
 
