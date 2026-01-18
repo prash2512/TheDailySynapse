@@ -10,6 +10,7 @@ import (
 
 	"dailysynapse/backend/internal/core"
 	"dailysynapse/backend/internal/store"
+	"dailysynapse/backend/pkg/readability"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -183,6 +184,13 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 			URL:         item.Link,
 			PublishedAt: *published,
 			Summary:     item.Description,
+		}
+
+		content, err := readability.Extract(item.Link)
+		if err != nil {
+			log.Printf("Failed to extract content for %s: %v", item.Link, err)
+		} else {
+			article.Content = content
 		}
 
 		if _, err := s.store.CreateArticle(ctx, article); err != nil {

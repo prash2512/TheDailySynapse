@@ -9,19 +9,18 @@ import (
 )
 
 func (q *Queries) CreateArticle(ctx context.Context, article core.Article) (int64, error) {
-	query := `
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	queryMeta := `
 		INSERT INTO articles (feed_id, title, url, published_at, summary)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO NOTHING;
 	`
-
-	stmt, err := q.db.PrepareContext(ctx, query)
-	if err != nil {
-		return 0, fmt.Errorf("preparing create article statement: %w", err)
-	}
-	defer stmt.Close()
-
-	res, err := stmt.ExecContext(ctx,
+	res, err := tx.ExecContext(ctx, queryMeta,
 		article.FeedID,
 		article.Title,
 		article.URL,
@@ -29,12 +28,31 @@ func (q *Queries) CreateArticle(ctx context.Context, article core.Article) (int6
 		article.Summary,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("executing create article: %w", err)
+		return 0, fmt.Errorf("executing create article meta: %w", err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("getting rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return 0, nil
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
 		return 0, fmt.Errorf("getting last insert id: %w", err)
+	}
+
+	queryContent := `INSERT INTO article_content (article_id, content, judge_model) VALUES (?, ?, ?)`
+	_, err = tx.ExecContext(ctx, queryContent, id, article.Content, article.JudgeModel)
+	if err != nil {
+		return 0, fmt.Errorf("executing create article content: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("committing transaction: %w", err)
 	}
 
 	return id, nil

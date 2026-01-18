@@ -18,8 +18,10 @@ type Article struct {
 	Title       string
 	URL         string
 	PublishedAt time.Time
+	Content     string
 	QualityRank int
 	Summary     string
+	JudgeModel  string
 	IsRead      bool
 	ReadLater   bool
 }
