@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -16,108 +17,89 @@ func NewQueries(db *sql.DB) *Queries {
 	return &Queries{db: db}
 }
 
-func (q *Queries) CreateFeed(url string, name string) (core.Feed, error) {
-	stmt, err := q.db.Prepare(`
+func (q *Queries) CreateFeed(ctx context.Context, url string, name string) (core.Feed, error) {
+	query := `
 		INSERT INTO feeds (url, name, status, last_synced_at)
 		VALUES (?, ?, 'active', ?);
-	`)
-	if err != nil {
-		return core.Feed{}, fmt.Errorf("could not prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
+	`
 	initialSyncTime := time.Time{}
-	res, err := stmt.Exec(url, name, initialSyncTime)
+	res, err := q.db.ExecContext(ctx, query, url, name, initialSyncTime)
 	if err != nil {
-		return core.Feed{}, fmt.Errorf("could not execute statement: %w", err)
+		return core.Feed{}, fmt.Errorf("executing statement: %w", err)
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		return core.Feed{}, fmt.Errorf("could not get last insert ID: %w", err)
+		return core.Feed{}, fmt.Errorf("getting last insert ID: %w", err)
 	}
 
-	feed := core.Feed{
+	return core.Feed{
 		ID:           id,
 		URL:          url,
 		Name:         name,
 		Status:       "active",
 		LastSyncedAt: initialSyncTime,
-	}
-
-	return feed, nil
+	}, nil
 }
 
-func (q *Queries) DeleteFeed(id int64) error {
-	stmt, err := q.db.Prepare("DELETE FROM feeds WHERE id = ?;")
+func (q *Queries) DeleteFeed(ctx context.Context, id int64) error {
+	res, err := q.db.ExecContext(ctx, "DELETE FROM feeds WHERE id = ?", id)
 	if err != nil {
-		return fmt.Errorf("could not prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	res, err := stmt.Exec(id)
-	if err != nil {
-		return fmt.Errorf("could not execute statement: %w", err)
+		return fmt.Errorf("executing statement: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("could not get rows affected: %w", err)
+		return fmt.Errorf("getting rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("no feed with id %d found", id)
+		return core.ErrNotFound
 	}
 
 	return nil
 }
 
-func (q *Queries) MarkFeedForDeletion(id int64) error {
-	stmt, err := q.db.Prepare("UPDATE feeds SET status = 'pending_deletion' WHERE id = ?;")
+func (q *Queries) MarkFeedForDeletion(ctx context.Context, id int64) error {
+	res, err := q.db.ExecContext(ctx, "UPDATE feeds SET status = 'pending_deletion' WHERE id = ?", id)
 	if err != nil {
-		return fmt.Errorf("could not prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	res, err := stmt.Exec(id)
-	if err != nil {
-		return fmt.Errorf("could not execute statement: %w", err)
+		return fmt.Errorf("executing statement: %w", err)
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("could not get rows affected: %w", err)
+		return fmt.Errorf("getting rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("no feed with id %d found", id)
+		return core.ErrNotFound
 	}
 
 	return nil
 }
 
-func (q *Queries) GetFeedsPendingDeletion() ([]core.Feed, error) {
-	rows, err := q.db.Query("SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds WHERE status = 'pending_deletion';")
+func (q *Queries) GetFeedsPendingDeletion(ctx context.Context) ([]core.Feed, error) {
+	rows, err := q.db.QueryContext(ctx, "SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds WHERE status = 'pending_deletion'")
 	if err != nil {
-		return nil, fmt.Errorf("could not query feeds pending deletion: %w", err)
+		return nil, fmt.Errorf("querying feeds pending deletion: %w", err)
 	}
 	defer rows.Close()
 
 	return q.scanFeeds(rows)
 }
 
-func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
-	rows, err := q.db.Query("SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds ORDER BY name;")
+func (q *Queries) GetAllFeeds(ctx context.Context) ([]core.Feed, error) {
+	rows, err := q.db.QueryContext(ctx, "SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds ORDER BY name")
 	if err != nil {
-		return nil, fmt.Errorf("could not query feeds: %w", err)
+		return nil, fmt.Errorf("querying feeds: %w", err)
 	}
 	defer rows.Close()
 
 	return q.scanFeeds(rows)
 }
 
-func (q *Queries) GetFeedsToSync(limit int) ([]core.Feed, error) {
-	rows, err := q.db.Query("SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds WHERE status = 'active' ORDER BY last_synced_at ASC LIMIT ?;", limit)
+func (q *Queries) GetFeedsToSync(ctx context.Context, limit int) ([]core.Feed, error) {
+	rows, err := q.db.QueryContext(ctx, "SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds WHERE status = 'active' ORDER BY last_synced_at ASC LIMIT ?", limit)
 	if err != nil {
-		return nil, fmt.Errorf("could not query feeds to sync: %w", err)
+		return nil, fmt.Errorf("querying feeds to sync: %w", err)
 	}
 	defer rows.Close()
 
@@ -131,7 +113,7 @@ func (q *Queries) scanFeeds(rows *sql.Rows) ([]core.Feed, error) {
 		var etag, lastMod sql.NullString
 
 		if err := rows.Scan(&feed.ID, &feed.URL, &feed.Name, &feed.Status, &etag, &lastMod, &feed.LastSyncedAt); err != nil {
-			return nil, fmt.Errorf("could not scan feed row: %w", err)
+			return nil, fmt.Errorf("scanning feed row: %w", err)
 		}
 
 		feed.Etag = etag.String
@@ -140,17 +122,16 @@ func (q *Queries) scanFeeds(rows *sql.Rows) ([]core.Feed, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error during rows iteration: %w", err)
+		return nil, fmt.Errorf("iterating rows: %w", err)
 	}
 
 	return feeds, nil
 }
 
-func (q *Queries) UpdateFeedHeaders(id int64, etag, lastModified string, lastSyncedAt time.Time) error {
-	query := `UPDATE feeds SET etag = ?, last_modified = ?, last_synced_at = ? WHERE id = ?`
-	_, err := q.db.Exec(query, etag, lastModified, lastSyncedAt, id)
+func (q *Queries) UpdateFeedHeaders(ctx context.Context, id int64, etag, lastModified string, lastSyncedAt time.Time) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE feeds SET etag = ?, last_modified = ?, last_synced_at = ? WHERE id = ?`, etag, lastModified, lastSyncedAt, id)
 	if err != nil {
-		return fmt.Errorf("failed to update feed headers: %w", err)
+		return fmt.Errorf("updating feed headers: %w", err)
 	}
 	return nil
 }

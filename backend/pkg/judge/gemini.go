@@ -11,11 +11,12 @@ import (
 )
 
 type GeminiClient struct {
-	client *genai.Client
-	model  *genai.GenerativeModel
+	client           *genai.Client
+	model            *genai.GenerativeModel
+	maxContentLength int
 }
 
-func NewGeminiClient(apiKey string) (*GeminiClient, error) {
+func NewGeminiClient(apiKey string, maxContentLength int) (*GeminiClient, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -27,14 +28,15 @@ func NewGeminiClient(apiKey string) (*GeminiClient, error) {
 	model.ResponseMIMEType = "application/json"
 
 	return &GeminiClient{
-		client: client,
-		model:  model,
+		client:           client,
+		model:            model,
+		maxContentLength: maxContentLength,
 	}, nil
 }
 
 func (g *GeminiClient) Score(ctx context.Context, title string, content string) (*ScoreResult, error) {
-	if len(content) > 20000 {
-		content = content[:20000]
+	if len(content) > g.maxContentLength {
+		content = content[:g.maxContentLength]
 	}
 
 	prompt := fmt.Sprintf(`

@@ -2,27 +2,33 @@ package judge
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
+	"dailysynapse/backend/internal/config"
 	"dailysynapse/backend/internal/store"
 	"dailysynapse/backend/pkg/judge"
+	"dailysynapse/backend/pkg/retry"
 )
 
 type Worker struct {
-	store  *store.Queries
+	store  store.ArticleStore
 	scorer judge.Scorer
+	cfg    *config.Config
+	logger *slog.Logger
 }
 
-func NewWorker(s *store.Queries, scorer judge.Scorer) *Worker {
+func NewWorker(s store.ArticleStore, scorer judge.Scorer, cfg *config.Config, logger *slog.Logger) *Worker {
 	return &Worker{
 		store:  s,
 		scorer: scorer,
+		cfg:    cfg,
+		logger: logger,
 	}
 }
 
 func (w *Worker) Start(ctx context.Context) {
-	ticker := time.NewTicker(4 * time.Second)
+	ticker := time.NewTicker(w.cfg.JudgeInterval)
 	defer ticker.Stop()
 
 	for {
@@ -38,7 +44,7 @@ func (w *Worker) Start(ctx context.Context) {
 func (w *Worker) processNextArticle(ctx context.Context) {
 	articles, err := w.store.GetUnscoredArticles(ctx, 1)
 	if err != nil {
-		log.Printf("Judge: Failed to fetch unscored articles: %v", err)
+		w.logger.Error("failed to fetch unscored articles", slog.String("error", err.Error()))
 		return
 	}
 
@@ -47,11 +53,20 @@ func (w *Worker) processNextArticle(ctx context.Context) {
 	}
 
 	article := articles[0]
-	log.Printf("Judge: Scoring '%s'...", article.Title)
+	w.logger.Info("scoring article", slog.Int64("id", article.ID), slog.String("title", article.Title))
 
-	result, err := w.scorer.Score(ctx, article.Title, article.Content)
+	var result *judge.ScoreResult
+	err = retry.Do(ctx, 3, func() error {
+		var scoreErr error
+		result, scoreErr = w.scorer.Score(ctx, article.Title, article.Content)
+		return scoreErr
+	})
+
 	if err != nil {
-		log.Printf("Judge: Failed to score article %d: %v", article.ID, err)
+		w.logger.Error("failed to score article",
+			slog.Int64("id", article.ID),
+			slog.String("error", err.Error()),
+		)
 		return
 	}
 
@@ -64,8 +79,14 @@ func (w *Worker) processNextArticle(ctx context.Context) {
 		result.Tags,
 	)
 	if err != nil {
-		log.Printf("Judge: Failed to save score for %d: %v", article.ID, err)
+		w.logger.Error("failed to save score",
+			slog.Int64("id", article.ID),
+			slog.String("error", err.Error()),
+		)
 	} else {
-		log.Printf("Judge: Scored '%s' -> %d/100", article.Title, result.TotalScore)
+		w.logger.Info("scored article",
+			slog.String("title", article.Title),
+			slog.Int("score", result.TotalScore),
+		)
 	}
 }

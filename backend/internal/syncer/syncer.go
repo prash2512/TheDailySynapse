@@ -3,58 +3,69 @@ package syncer
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
+	"dailysynapse/backend/internal/config"
 	"dailysynapse/backend/internal/core"
 	"dailysynapse/backend/internal/store"
 	"dailysynapse/backend/pkg/readability"
+
 	"github.com/mmcdole/gofeed"
 )
 
 type Syncer struct {
-	store    *store.Queries
-	fp       *gofeed.Parser
-	feedChan chan core.Feed
+	store     store.Store
+	extractor readability.Extractor
+	fp        *gofeed.Parser
+	feedChan  chan core.Feed
+	cfg       *config.Config
+	logger    *slog.Logger
 }
 
-func New(s *store.Queries) *Syncer {
+func New(s store.Store, cfg *config.Config, logger *slog.Logger) *Syncer {
 	fp := gofeed.NewParser()
-	fp.Client = &http.Client{
-		Timeout: 10 * time.Second,
-	}
+	fp.Client = &http.Client{Timeout: cfg.HTTPTimeout}
+
 	return &Syncer{
-		store:    s,
-		fp:       fp,
-		feedChan: make(chan core.Feed, 100),
+		store:     s,
+		extractor: readability.NewExtractor(cfg.HTTPTimeout),
+		fp:        fp,
+		feedChan:  make(chan core.Feed, 100),
+		cfg:       cfg,
+		logger:    logger,
 	}
 }
 
-func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, interval time.Duration) {
+func (s *Syncer) StartBackgroundWorkers(ctx context.Context) {
 	var wg sync.WaitGroup
 
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < s.cfg.SyncWorkers; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 			for feed := range s.feedChan {
 				if err := s.syncFeed(ctx, feed); err != nil {
-					log.Printf("[Worker %d] Error syncing %s: %v", workerID, feed.Name, err)
+					s.logger.Error("sync failed",
+						slog.Int("worker", workerID),
+						slog.String("feed", feed.Name),
+						slog.String("error", err.Error()),
+					)
 				}
 			}
 		}(i)
 	}
 
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(s.cfg.SyncInterval)
 	cleanupTicker := time.NewTicker(24 * time.Hour)
 	purgeTicker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 	defer cleanupTicker.Stop()
 	defer purgeTicker.Stop()
 
-	s.TriggerSync(ctx, 20)
+	s.TriggerSync(ctx)
 
 	for {
 		select {
@@ -63,7 +74,7 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 			wg.Wait()
 			return
 		case <-ticker.C:
-			s.TriggerSync(ctx, 20)
+			s.TriggerSync(ctx)
 		case <-purgeTicker.C:
 			s.purgeDeletedFeeds(ctx)
 		case <-cleanupTicker.C:
@@ -72,8 +83,8 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 	}
 }
 
-func (s *Syncer) TriggerSync(ctx context.Context, limit int) error {
-	feeds, err := s.store.GetFeedsToSync(limit)
+func (s *Syncer) TriggerSync(ctx context.Context) error {
+	feeds, err := s.store.GetFeedsToSync(ctx, s.cfg.SyncBatchSize)
 	if err != nil {
 		return fmt.Errorf("failed to fetch feeds: %w", err)
 	}
@@ -83,7 +94,7 @@ func (s *Syncer) TriggerSync(ctx context.Context, limit int) error {
 			select {
 			case s.feedChan <- feed:
 			default:
-				log.Printf("Worker queue full, skipping feed %s", feed.Name)
+				s.logger.Warn("worker queue full", slog.String("feed", feed.Name))
 			}
 		}
 	}()
@@ -92,24 +103,24 @@ func (s *Syncer) TriggerSync(ctx context.Context, limit int) error {
 }
 
 func (s *Syncer) purgeDeletedFeeds(ctx context.Context) {
-	feeds, err := s.store.GetFeedsPendingDeletion()
+	feeds, err := s.store.GetFeedsPendingDeletion(ctx)
 	if err != nil {
-		log.Printf("Failed to fetch feeds pending deletion: %v", err)
+		s.logger.Error("failed to fetch feeds pending deletion", slog.String("error", err.Error()))
 		return
 	}
 
 	for _, feed := range feeds {
-		log.Printf("Purging feed %s (ID: %d)...", feed.Name, feed.ID)
+		s.logger.Info("purging feed", slog.String("name", feed.Name), slog.Int64("id", feed.ID))
 
 		if err := s.store.DeleteArticlesByFeedID(ctx, feed.ID); err != nil {
-			log.Printf("Failed to delete articles for feed %d: %v", feed.ID, err)
+			s.logger.Error("failed to delete articles", slog.Int64("feed_id", feed.ID), slog.String("error", err.Error()))
 			continue
 		}
 
-		if err := s.store.DeleteFeed(feed.ID); err != nil {
-			log.Printf("Failed to delete feed %d: %v", feed.ID, err)
+		if err := s.store.DeleteFeed(ctx, feed.ID); err != nil {
+			s.logger.Error("failed to delete feed", slog.Int64("feed_id", feed.ID), slog.String("error", err.Error()))
 		} else {
-			log.Printf("Successfully purged feed %s", feed.Name)
+			s.logger.Info("purged feed", slog.String("name", feed.Name))
 		}
 	}
 }
@@ -117,15 +128,15 @@ func (s *Syncer) purgeDeletedFeeds(ctx context.Context) {
 func (s *Syncer) runCleanup(ctx context.Context) {
 	s.purgeDeletedFeeds(ctx)
 
-	horizon := time.Now().AddDate(0, 0, -30)
+	horizon := time.Now().AddDate(0, 0, -s.cfg.RetentionDays)
 
 	count, err := s.store.DeleteOldArticles(ctx, horizon)
 	if err != nil {
-		log.Printf("Cleanup failed: %v", err)
+		s.logger.Error("cleanup failed", slog.String("error", err.Error()))
 		return
 	}
 	if count > 0 {
-		log.Printf("Cleanup: Deleted %d old articles", count)
+		s.logger.Info("cleanup complete", slog.Int64("deleted", count))
 	}
 }
 
@@ -150,7 +161,7 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotModified {
-		return s.store.UpdateFeedHeaders(feed.ID, feed.Etag, feed.LastModified, time.Now())
+		return s.store.UpdateFeedHeaders(ctx, feed.ID, feed.Etag, feed.LastModified, time.Now())
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -165,7 +176,7 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 	newEtag := resp.Header.Get("ETag")
 	newLastMod := resp.Header.Get("Last-Modified")
 
-	horizon := time.Now().AddDate(0, 0, -7)
+	horizon := time.Now().AddDate(0, 0, -s.cfg.ArticleHorizonDays)
 
 	for _, item := range parsed.Items {
 		published := item.PublishedParsed
@@ -186,17 +197,23 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 			Summary:     item.Description,
 		}
 
-		content, err := readability.Extract(item.Link)
+		content, err := s.extractor.Extract(ctx, item.Link)
 		if err != nil {
-			log.Printf("Failed to extract content for %s: %v", item.Link, err)
+			s.logger.Warn("content extraction failed",
+				slog.String("url", item.Link),
+				slog.String("error", err.Error()),
+			)
 		} else {
 			article.Content = content
 		}
 
 		if _, err := s.store.CreateArticle(ctx, article); err != nil {
-			log.Printf("Failed to save article %s: %v", item.Title, err)
+			s.logger.Error("failed to save article",
+				slog.String("title", item.Title),
+				slog.String("error", err.Error()),
+			)
 		}
 	}
 
-	return s.store.UpdateFeedHeaders(feed.ID, newEtag, newLastMod, time.Now())
+	return s.store.UpdateFeedHeaders(ctx, feed.ID, newEtag, newLastMod, time.Now())
 }
