@@ -71,7 +71,7 @@ func (q *Queries) DeleteFeed(id int64) error {
 }
 
 func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
-	rows, err := q.db.Query("SELECT id, url, name, etag, last_synced_at FROM feeds ORDER BY name;")
+	rows, err := q.db.Query("SELECT id, url, name, etag, last_modified, last_synced_at FROM feeds ORDER BY name;")
 	if err != nil {
 		return nil, fmt.Errorf("could not query feeds: %w", err)
 	}
@@ -80,9 +80,14 @@ func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
 	var feeds []core.Feed
 	for rows.Next() {
 		var feed core.Feed
-		if err := rows.Scan(&feed.ID, &feed.URL, &feed.Name, &feed.Etag, &feed.LastSyncedAt); err != nil {
+		var etag, lastMod sql.NullString
+		
+		if err := rows.Scan(&feed.ID, &feed.URL, &feed.Name, &etag, &lastMod, &feed.LastSyncedAt); err != nil {
 			return nil, fmt.Errorf("could not scan feed row: %w", err)
 		}
+		
+		feed.Etag = etag.String
+		feed.LastModified = lastMod.String
 		feeds = append(feeds, feed)
 	}
 
@@ -91,4 +96,13 @@ func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
 	}
 
 	return feeds, nil
+}
+
+func (q *Queries) UpdateFeedHeaders(id int64, etag, lastModified string, lastSyncedAt time.Time) error {
+	query := `UPDATE feeds SET etag = ?, last_modified = ?, last_synced_at = ? WHERE id = ?`
+	_, err := q.db.Exec(query, etag, lastModified, lastSyncedAt, id)
+	if err != nil {
+		return fmt.Errorf("failed to update feed headers: %w", err)
+	}
+	return nil
 }
