@@ -7,13 +7,13 @@ import (
 )
 
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
-	if err := s.syncer.SyncAll(r.Context()); err != nil {
-		http.Error(w, fmt.Sprintf("failed to sync: %v", err), http.StatusInternalServerError)
+	if err := s.syncer.TriggerSync(r.Context()); err != nil {
+		http.Error(w, fmt.Sprintf("failed to trigger sync: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Sync completed successfully"))
+	w.Write([]byte("Sync triggered successfully"))
 }
 
 func (s *Server) handleGetFeeds(w http.ResponseWriter, r *http.Request) {

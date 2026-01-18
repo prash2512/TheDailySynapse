@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"sync"
 	"time"
 
 	"dailysynapse/backend/internal/core"
@@ -12,44 +14,121 @@ import (
 )
 
 type Syncer struct {
-	store *store.Queries
-	fp    *gofeed.Parser
+	store    *store.Queries
+	fp       *gofeed.Parser
+	feedChan chan core.Feed
 }
 
 func New(s *store.Queries) *Syncer {
+	fp := gofeed.NewParser()
+	fp.Client = &http.Client{
+		Timeout: 10 * time.Second,
+	}
 	return &Syncer{
-		store: s,
-		fp:    gofeed.NewParser(),
+		store:    s,
+		fp:       fp,
+		feedChan: make(chan core.Feed, 100),
 	}
 }
 
-func (s *Syncer) SyncAll(ctx context.Context) error {
-	feeds, err := s.store.GetAllFeeds()
-	if err != nil {
-		return fmt.Errorf("fetching feeds: %w", err)
+func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, interval time.Duration) {
+	var wg sync.WaitGroup
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for feed := range s.feedChan {
+				if err := s.syncFeed(ctx, feed); err != nil {
+					log.Printf("[Worker %d] Error syncing %s: %v", workerID, feed.Name, err)
+				}
+			}
+		}(i)
 	}
 
-	for _, feed := range feeds {
-		if err := s.syncFeed(ctx, feed); err != nil {
-			log.Printf("error syncing feed %s: %v", feed.URL, err)
-			continue
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	s.TriggerSync(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			close(s.feedChan)
+			wg.Wait()
+			return
+		case <-ticker.C:
+			s.TriggerSync(ctx)
 		}
 	}
+}
 
+func (s *Syncer) TriggerSync(ctx context.Context) error {
+	feeds, err := s.store.GetAllFeeds()
+	if err != nil {
+		return fmt.Errorf("failed to fetch feeds: %w", err)
+	}
+	
+	go func() {
+		for _, feed := range feeds {
+			select {
+			case s.feedChan <- feed:
+			default:
+				log.Printf("Worker queue full, skipping feed %s", feed.Name)
+			}
+		}
+	}()
+	
 	return nil
 }
 
 func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
-	parsed, err := s.fp.ParseURLWithContext(feed.URL, ctx)
+	req, err := http.NewRequestWithContext(ctx, "GET", feed.URL, nil)
 	if err != nil {
-		return fmt.Errorf("parsing feed: %w", err)
+		return err
 	}
+
+	req.Header.Set("User-Agent", "TheDailySynapse/1.0")
+	if feed.Etag != "" {
+		req.Header.Set("If-None-Match", feed.Etag)
+	}
+	if feed.LastModified != "" {
+		req.Header.Set("If-Modified-Since", feed.LastModified)
+	}
+
+	resp, err := s.fp.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotModified {
+		return s.store.UpdateFeedHeaders(feed.ID, feed.Etag, feed.LastModified, time.Now())
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned error: %s", resp.Status)
+	}
+
+	parsed, err := s.fp.Parse(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	newEtag := resp.Header.Get("ETag")
+	newLastMod := resp.Header.Get("Last-Modified")
+	
+	horizon := time.Now().AddDate(0, 0, -7)
 
 	for _, item := range parsed.Items {
 		published := item.PublishedParsed
 		if published == nil {
 			now := time.Now()
 			published = &now
+		}
+
+		if published.Before(horizon) {
+			continue
 		}
 
 		article := core.Article{
@@ -61,9 +140,9 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 		}
 
 		if _, err := s.store.CreateArticle(ctx, article); err != nil {
-			log.Printf("failed to save article %s: %v", item.Title, err)
+			log.Printf("Failed to save article %s: %v", item.Title, err)
 		}
 	}
 
-	return nil
+	return s.store.UpdateFeedHeaders(feed.ID, newEtag, newLastMod, time.Now())
 }

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"dailysynapse/backend/internal/api"
 	"dailysynapse/backend/internal/config"
@@ -22,6 +24,12 @@ func main() {
 
 	storeQueries := store.NewQueries(db)
 	feedSyncer := syncer.New(storeQueries)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go feedSyncer.StartBackgroundWorkers(ctx, 5, 15*time.Minute)
+
 	server := api.NewServer(db, feedSyncer)
 
 	log.Printf("Starting server on port %s...", cfg.Port)

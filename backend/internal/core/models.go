@@ -7,6 +7,7 @@ type Feed struct {
 	URL          string
 	Name         string
 	Etag         string
+	LastModified string
 	LastSyncedAt time.Time
 }
 
