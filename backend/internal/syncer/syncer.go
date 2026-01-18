@@ -72,7 +72,7 @@ func (s *Syncer) TriggerSync(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch feeds: %w", err)
 	}
-	
+
 	go func() {
 		for _, feed := range feeds {
 			select {
@@ -82,15 +82,15 @@ func (s *Syncer) TriggerSync(ctx context.Context) error {
 			}
 		}
 	}()
-	
+
 	return nil
 }
 
 func (s *Syncer) runCleanup(ctx context.Context) {
-	// Keep articles for 30 days to allow for some history/search, 
+	// Keep articles for 30 days to allow for some history/search,
 	// even if the "Daily" view is only 7 days.
 	horizon := time.Now().AddDate(0, 0, -30)
-	
+
 	count, err := s.store.DeleteOldArticles(ctx, horizon)
 	if err != nil {
 		log.Printf("Cleanup failed: %v", err)
@@ -136,7 +136,7 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 
 	newEtag := resp.Header.Get("ETag")
 	newLastMod := resp.Header.Get("Last-Modified")
-	
+
 	horizon := time.Now().AddDate(0, 0, -7)
 
 	for _, item := range parsed.Items {

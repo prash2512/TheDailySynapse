@@ -14,7 +14,7 @@ func (q *Queries) CreateArticle(ctx context.Context, article core.Article) (int6
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO NOTHING;
 	`
-	
+
 	stmt, err := q.db.PrepareContext(ctx, query)
 	if err != nil {
 		return 0, fmt.Errorf("preparing create article statement: %w", err)
@@ -43,7 +43,7 @@ func (q *Queries) CreateArticle(ctx context.Context, article core.Article) (int6
 // DeleteOldArticles removes articles older than the horizon that are NOT marked as read_later.
 func (q *Queries) DeleteOldArticles(ctx context.Context, horizon time.Time) (int64, error) {
 	query := `DELETE FROM articles WHERE published_at < ? AND read_later = 0`
-	
+
 	res, err := q.db.ExecContext(ctx, query, horizon)
 	if err != nil {
 		return 0, fmt.Errorf("executing delete old articles: %w", err)

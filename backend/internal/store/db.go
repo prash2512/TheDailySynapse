@@ -70,7 +70,7 @@ func runMigrations(db *sql.DB) error {
 		if len(parts) < 2 {
 			continue
 		}
-		
+
 		v, err := strconv.Atoi(parts[0])
 		if err != nil {
 			continue

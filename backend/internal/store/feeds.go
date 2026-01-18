@@ -81,11 +81,11 @@ func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
 	for rows.Next() {
 		var feed core.Feed
 		var etag, lastMod sql.NullString
-		
+
 		if err := rows.Scan(&feed.ID, &feed.URL, &feed.Name, &etag, &lastMod, &feed.LastSyncedAt); err != nil {
 			return nil, fmt.Errorf("could not scan feed row: %w", err)
 		}
-		
+
 		feed.Etag = etag.String
 		feed.LastModified = lastMod.String
 		feeds = append(feeds, feed)
