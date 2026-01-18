@@ -47,11 +47,11 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 	}
 
 	ticker := time.NewTicker(interval)
-	cleanupTicker := time.NewTicker(24 * time.Hour) // Run cleanup daily
+	cleanupTicker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	defer cleanupTicker.Stop()
 
-	s.TriggerSync(ctx)
+	s.TriggerSync(ctx, 20)
 
 	for {
 		select {
@@ -60,15 +60,15 @@ func (s *Syncer) StartBackgroundWorkers(ctx context.Context, numWorkers int, int
 			wg.Wait()
 			return
 		case <-ticker.C:
-			s.TriggerSync(ctx)
+			s.TriggerSync(ctx, 20)
 		case <-cleanupTicker.C:
 			s.runCleanup(ctx)
 		}
 	}
 }
 
-func (s *Syncer) TriggerSync(ctx context.Context) error {
-	feeds, err := s.store.GetAllFeeds()
+func (s *Syncer) TriggerSync(ctx context.Context, limit int) error {
+	feeds, err := s.store.GetFeedsToSync(limit)
 	if err != nil {
 		return fmt.Errorf("failed to fetch feeds: %w", err)
 	}
@@ -87,8 +87,6 @@ func (s *Syncer) TriggerSync(ctx context.Context) error {
 }
 
 func (s *Syncer) runCleanup(ctx context.Context) {
-	// Keep articles for 30 days to allow for some history/search,
-	// even if the "Daily" view is only 7 days.
 	horizon := time.Now().AddDate(0, 0, -30)
 
 	count, err := s.store.DeleteOldArticles(ctx, horizon)

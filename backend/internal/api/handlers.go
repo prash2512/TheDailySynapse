@@ -7,7 +7,7 @@ import (
 )
 
 func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
-	if err := s.syncer.TriggerSync(r.Context()); err != nil {
+	if err := s.syncer.TriggerSync(r.Context(), 20); err != nil {
 		http.Error(w, fmt.Sprintf("failed to trigger sync: %v", err), http.StatusInternalServerError)
 		return
 	}

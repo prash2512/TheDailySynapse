@@ -77,6 +77,20 @@ func (q *Queries) GetAllFeeds() ([]core.Feed, error) {
 	}
 	defer rows.Close()
 
+	return q.scanFeeds(rows)
+}
+
+func (q *Queries) GetFeedsToSync(limit int) ([]core.Feed, error) {
+	rows, err := q.db.Query("SELECT id, url, name, etag, last_modified, last_synced_at FROM feeds ORDER BY last_synced_at ASC LIMIT ?;", limit)
+	if err != nil {
+		return nil, fmt.Errorf("could not query feeds to sync: %w", err)
+	}
+	defer rows.Close()
+
+	return q.scanFeeds(rows)
+}
+
+func (q *Queries) scanFeeds(rows *sql.Rows) ([]core.Feed, error) {
 	var feeds []core.Feed
 	for rows.Next() {
 		var feed core.Feed
