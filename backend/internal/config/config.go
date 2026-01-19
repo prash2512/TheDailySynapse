@@ -42,7 +42,7 @@ func Load() *Config {
 		SyncInterval:       getDurationEnv("SYNC_INTERVAL", 15*time.Minute),
 		SyncBatchSize:      getIntEnv("SYNC_BATCH_SIZE", 20),
 		SyncWorkers:        getIntEnv("SYNC_WORKERS", 5),
-		ArticleHorizonDays: getIntEnv("ARTICLE_HORIZON_DAYS", 7),
+		ArticleHorizonDays: getIntEnv("ARTICLE_HORIZON_DAYS", 120),
 		RetentionDays:      getIntEnv("RETENTION_DAYS", 30),
 		HTTPTimeout:        getDurationEnv("HTTP_TIMEOUT", 10*time.Second),
 
