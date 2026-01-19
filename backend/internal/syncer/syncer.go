@@ -173,6 +173,10 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 		return err
 	}
 
+	if parsed.Title != "" && feed.Name == "" {
+		s.store.UpdateFeedName(ctx, feed.ID, parsed.Title)
+	}
+
 	newEtag := resp.Header.Get("ETag")
 	newLastMod := resp.Header.Get("Last-Modified")
 

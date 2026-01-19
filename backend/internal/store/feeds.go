@@ -135,3 +135,11 @@ func (q *Queries) UpdateFeedHeaders(ctx context.Context, id int64, etag, lastMod
 	}
 	return nil
 }
+
+func (q *Queries) UpdateFeedName(ctx context.Context, id int64, name string) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE feeds SET name = ? WHERE id = ? AND (name IS NULL OR name = '')`, name, id)
+	if err != nil {
+		return fmt.Errorf("updating feed name: %w", err)
+	}
+	return nil
+}
