@@ -15,6 +15,7 @@ type Feed struct {
 type Article struct {
 	ID            int64
 	FeedID        int64
+	FeedName      string
 	Title         string
 	URL           string
 	PublishedAt   time.Time

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"dailysynapse/backend/internal/core"
 )
@@ -74,4 +75,42 @@ func (s *Server) handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusAccepted, map[string]string{"message": "feed marked for deletion"})
+}
+
+func (s *Server) handleGetDaily(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 5
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 20 {
+			limit = l
+		}
+	}
+
+	articles, err := s.store.GetTopArticles(r.Context(), limit)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to fetch articles: %v", err))
+		return
+	}
+	JSON(w, http.StatusOK, articles)
+}
+
+func (s *Server) handleGetArticle(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "invalid article id")
+		return
+	}
+
+	article, err := s.store.GetArticleByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, core.ErrNotFound) {
+			Error(w, http.StatusNotFound, "article not found")
+			return
+		}
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to fetch article: %v", err))
+		return
+	}
+
+	JSON(w, http.StatusOK, article)
 }

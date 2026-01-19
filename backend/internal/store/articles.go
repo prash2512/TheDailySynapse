@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -154,4 +156,63 @@ func (q *Queries) UpdateArticleScore(ctx context.Context, id int64, rank int, su
 	}
 
 	return tx.Commit()
+}
+
+func (q *Queries) GetTopArticles(ctx context.Context, limit int) ([]core.Article, error) {
+	query := `
+		SELECT a.id, a.feed_id, a.title, a.url, a.published_at, 
+		       a.quality_rank, a.summary, a.justification,
+		       f.name as feed_name
+		FROM articles a
+		JOIN feeds f ON a.feed_id = f.id
+		WHERE a.quality_rank IS NOT NULL
+		  AND a.published_at > datetime('now', '-7 days')
+		ORDER BY a.quality_rank DESC, a.published_at DESC
+		LIMIT ?
+	`
+	rows, err := q.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying top articles: %w", err)
+	}
+	defer rows.Close()
+
+	var articles []core.Article
+	for rows.Next() {
+		var a core.Article
+		var feedName string
+		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
+			&a.QualityRank, &a.Summary, &a.Justification, &feedName); err != nil {
+			return nil, fmt.Errorf("scanning article: %w", err)
+		}
+		a.FeedName = feedName
+		articles = append(articles, a)
+	}
+	return articles, nil
+}
+
+func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, error) {
+	query := `
+		SELECT a.id, a.feed_id, a.title, a.url, a.published_at,
+		       a.quality_rank, a.summary, a.justification,
+		       ac.content, f.name as feed_name
+		FROM articles a
+		JOIN article_content ac ON a.id = ac.article_id
+		JOIN feeds f ON a.feed_id = f.id
+		WHERE a.id = ?
+	`
+	var a core.Article
+	var feedName string
+	err := q.db.QueryRowContext(ctx, query, id).Scan(
+		&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
+		&a.QualityRank, &a.Summary, &a.Justification,
+		&a.Content, &feedName,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, core.ErrNotFound
+		}
+		return nil, fmt.Errorf("querying article: %w", err)
+	}
+	a.FeedName = feedName
+	return &a, nil
 }

@@ -23,6 +23,8 @@ type ArticleStore interface {
 	DeleteArticlesByFeedID(ctx context.Context, feedID int64) error
 	GetUnscoredArticles(ctx context.Context, limit int) ([]core.Article, error)
 	UpdateArticleScore(ctx context.Context, id int64, rank int, summary, justification, model string, tags []string) error
+	GetTopArticles(ctx context.Context, limit int) ([]core.Article, error)
+	GetArticleByID(ctx context.Context, id int64) (*core.Article, error)
 }
 
 type Store interface {

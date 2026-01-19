@@ -31,10 +31,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleReady)
 
-	mux.HandleFunc("POST /sync", s.handleSync)
-	mux.HandleFunc("GET /feeds", s.handleGetFeeds)
-	mux.HandleFunc("POST /feeds", s.handleCreateFeed)
-	mux.HandleFunc("DELETE /feeds/{id}", s.handleDeleteFeed)
+	mux.HandleFunc("POST /api/sync", s.handleSync)
+	mux.HandleFunc("GET /api/feeds", s.handleGetFeeds)
+	mux.HandleFunc("POST /api/feeds", s.handleCreateFeed)
+	mux.HandleFunc("DELETE /api/feeds/{id}", s.handleDeleteFeed)
+	mux.HandleFunc("GET /api/daily", s.handleGetDaily)
+	mux.HandleFunc("GET /api/articles/{id}", s.handleGetArticle)
 
 	return chain(mux,
 		corsMiddleware,
