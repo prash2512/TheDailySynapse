@@ -152,3 +152,45 @@ func (s *Server) handleGetTags(w http.ResponseWriter, r *http.Request) {
 	}
 	JSON(w, http.StatusOK, tags)
 }
+
+func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "invalid article id")
+		return
+	}
+
+	if err := s.store.MarkArticleRead(r.Context(), id); err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to mark read: %v", err))
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "marked as read"})
+}
+
+func (s *Server) handleToggleSaved(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "invalid article id")
+		return
+	}
+
+	saved, err := s.store.ToggleArticleSaved(r.Context(), id)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to toggle saved: %v", err))
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]bool{"saved": saved})
+}
+
+func (s *Server) handleGetSaved(w http.ResponseWriter, r *http.Request) {
+	articles, err := s.store.GetSavedArticles(r.Context())
+	if err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to fetch saved articles: %v", err))
+		return
+	}
+	JSON(w, http.StatusOK, articles)
+}

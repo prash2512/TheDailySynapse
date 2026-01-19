@@ -1,0 +1,59 @@
+{{define "content"}}
+<div class="container feeds-page">
+  <h1>Your Feeds</h1>
+  
+  {{if .Message}}
+  <div class="message {{.MessageType}}">{{.Message}}</div>
+  {{end}}
+  
+  {{if .Feeds}}
+  <div class="feed-list">
+    {{range .Feeds}}
+    <div class="feed-item" data-id="{{.ID}}">
+      <div class="feed-info">
+        <div class="feed-name">{{if .Name}}{{.Name}}{{else}}Unnamed Feed{{end}}</div>
+        <div class="feed-url">{{.URL}}</div>
+      </div>
+      <button class="delete-btn" onclick="deleteFeed({{.ID}}, '{{if .Name}}{{.Name}}{{else}}this feed{{end}}')" title="Remove feed">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <div class="empty-state" style="padding: 32px 0;">
+    <p>No feeds added yet.</p>
+  </div>
+  {{end}}
+  
+  <div class="add-feed">
+    <h2>Add a new feed</h2>
+    <form action="/feeds" method="POST">
+      <input type="text" name="url" placeholder="https://example.com/feed.xml" required>
+      <button type="submit" class="btn btn-primary">Add Feed</button>
+    </form>
+  </div>
+</div>
+
+<script>
+function deleteFeed(id, name) {
+  if (!confirm('Remove "' + name + '" from your feeds?')) return;
+  
+  fetch('/api/feeds/' + id, { method: 'DELETE' })
+    .then(function(res) {
+      if (res.ok) {
+        var el = document.querySelector('[data-id="' + id + '"]');
+        if (el) el.remove();
+      } else {
+        alert('Failed to remove feed');
+      }
+    })
+    .catch(function() {
+      alert('Failed to remove feed');
+    });
+}
+</script>
+{{end}}
+

@@ -163,10 +163,10 @@ func (q *Queries) GetTopArticles(ctx context.Context, limit int) ([]core.Article
 	query := `
 		SELECT a.id, a.feed_id, a.title, a.url, a.published_at, 
 		       a.quality_rank, a.summary, a.justification,
-		       f.name as feed_name
+		       f.name as feed_name, a.is_read, a.read_later
 		FROM articles a
 		JOIN feeds f ON a.feed_id = f.id
-		WHERE a.quality_rank IS NOT NULL
+		WHERE a.quality_rank IS NOT NULL AND a.is_read = 0
 		ORDER BY a.quality_rank DESC, a.published_at DESC
 		LIMIT ?
 	`
@@ -181,7 +181,7 @@ func (q *Queries) GetTopArticles(ctx context.Context, limit int) ([]core.Article
 		var a core.Article
 		var feedName string
 		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
-			&a.QualityRank, &a.Summary, &a.Justification, &feedName); err != nil {
+			&a.QualityRank, &a.Summary, &a.Justification, &feedName, &a.IsRead, &a.ReadLater); err != nil {
 			return nil, fmt.Errorf("scanning article: %w", err)
 		}
 		a.FeedName = feedName
@@ -194,7 +194,7 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 	query := `
 		SELECT a.id, a.feed_id, a.title, a.url, a.published_at,
 		       a.quality_rank, a.summary, a.justification,
-		       ac.content, f.name as feed_name
+		       ac.content, f.name as feed_name, a.is_read, a.read_later
 		FROM articles a
 		JOIN article_content ac ON a.id = ac.article_id
 		JOIN feeds f ON a.feed_id = f.id
@@ -205,7 +205,7 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 	err := q.db.QueryRowContext(ctx, query, id).Scan(
 		&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
 		&a.QualityRank, &a.Summary, &a.Justification,
-		&a.Content, &feedName,
+		&a.Content, &feedName, &a.IsRead, &a.ReadLater,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -289,4 +289,82 @@ func (q *Queries) GetAllTags(ctx context.Context) ([]core.TagCount, error) {
 		tags = append(tags, t)
 	}
 	return tags, nil
+}
+
+func (q *Queries) GetArticleTags(ctx context.Context, articleID int64) ([]string, error) {
+	query := `
+		SELECT t.name
+		FROM tags t
+		JOIN article_tags at ON t.id = at.tag_id
+		WHERE at.article_id = ?
+		ORDER BY t.name
+	`
+	rows, err := q.db.QueryContext(ctx, query, articleID)
+	if err != nil {
+		return nil, fmt.Errorf("querying article tags: %w", err)
+	}
+	defer rows.Close()
+
+	var tags []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scanning tag: %w", err)
+		}
+		tags = append(tags, name)
+	}
+	return tags, nil
+}
+
+func (q *Queries) MarkArticleRead(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE articles SET is_read = 1 WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("marking article read: %w", err)
+	}
+	return nil
+}
+
+func (q *Queries) ToggleArticleSaved(ctx context.Context, id int64) (bool, error) {
+	var currentState bool
+	err := q.db.QueryRowContext(ctx, `SELECT read_later FROM articles WHERE id = ?`, id).Scan(&currentState)
+	if err != nil {
+		return false, fmt.Errorf("getting current state: %w", err)
+	}
+
+	newState := !currentState
+	_, err = q.db.ExecContext(ctx, `UPDATE articles SET read_later = ? WHERE id = ?`, newState, id)
+	if err != nil {
+		return false, fmt.Errorf("toggling saved state: %w", err)
+	}
+	return newState, nil
+}
+
+func (q *Queries) GetSavedArticles(ctx context.Context) ([]core.Article, error) {
+	query := `
+		SELECT a.id, a.feed_id, a.title, a.url, a.published_at,
+		       a.quality_rank, a.summary, a.justification,
+		       f.name as feed_name
+		FROM articles a
+		JOIN feeds f ON a.feed_id = f.id
+		WHERE a.read_later = 1
+		ORDER BY a.published_at DESC
+	`
+	rows, err := q.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("querying saved articles: %w", err)
+	}
+	defer rows.Close()
+
+	var articles []core.Article
+	for rows.Next() {
+		var a core.Article
+		var feedName string
+		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
+			&a.QualityRank, &a.Summary, &a.Justification, &feedName); err != nil {
+			return nil, fmt.Errorf("scanning article: %w", err)
+		}
+		a.FeedName = feedName
+		articles = append(articles, a)
+	}
+	return articles, nil
 }

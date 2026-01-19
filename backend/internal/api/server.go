@@ -2,12 +2,17 @@ package api
 
 import (
 	"database/sql"
+	"embed"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
 	"dailysynapse/backend/internal/store"
 	"dailysynapse/backend/internal/syncer"
 )
+
+//go:embed static
+var staticFS embed.FS
 
 type Server struct {
 	db     *sql.DB
@@ -28,6 +33,14 @@ func NewServer(db *sql.DB, s *syncer.Syncer, logger *slog.Logger) *Server {
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
+	staticContent, _ := fs.Sub(staticFS, "static")
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticContent))))
+
+	mux.HandleFunc("GET /{$}", s.handleDailyPage)
+	mux.HandleFunc("GET /read/{id}", s.handleReaderPage)
+	mux.HandleFunc("GET /feeds", s.handleFeedsPage)
+	mux.HandleFunc("POST /feeds", s.handleFeedsPage)
+
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleReady)
 
@@ -38,7 +51,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/daily", s.handleGetDaily)
 	mux.HandleFunc("GET /api/articles", s.handleGetArticles)
 	mux.HandleFunc("GET /api/articles/{id}", s.handleGetArticle)
+	mux.HandleFunc("POST /api/articles/{id}/read", s.handleMarkRead)
+	mux.HandleFunc("POST /api/articles/{id}/save", s.handleToggleSaved)
+	mux.HandleFunc("GET /api/saved", s.handleGetSaved)
 	mux.HandleFunc("GET /api/tags", s.handleGetTags)
+
+	mux.HandleFunc("GET /saved", s.handleSavedPage)
 
 	return chain(mux,
 		corsMiddleware,

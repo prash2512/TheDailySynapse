@@ -1,0 +1,78 @@
+{{define "content"}}
+<div class="reader">
+  <div class="reader-header">
+    <a href="/" class="back">← Back to Daily</a>
+    <h1>{{.Article.Title}}</h1>
+    <div class="meta">
+      <span class="source">{{if .Article.FeedName}}{{.Article.FeedName}}{{else}}Unknown{{end}}</span>
+      <span class="dot">·</span>
+      <span class="date">{{.Article.FormattedDate}}</span>
+      <span class="dot">·</span>
+      <span class="reading-time">{{.Article.ReadingTime}} min read</span>
+      {{if .Article.QualityRank}}
+      <span class="dot">·</span>
+      <span class="score{{if ge .Article.QualityRank 80}} high{{else if ge .Article.QualityRank 60}} mid{{end}}">Score: {{.Article.QualityRank}}</span>
+      {{end}}
+    </div>
+    {{if .Article.Tags}}
+    <div class="tags" style="margin-top: 16px;">
+      {{range .Article.Tags}}
+      <span class="tag">{{.}}</span>
+      {{end}}
+    </div>
+    {{end}}
+    <div class="reader-actions">
+      <button class="action-btn" onclick="markRead({{.Article.ID}})" title="Mark as read">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>
+        Mark Done
+      </button>
+      <button class="action-btn {{if .Article.ReadLater}}saved{{end}}" onclick="toggleSave({{.Article.ID}})" title="Save forever">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="{{if .Article.ReadLater}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+        </svg>
+        {{if .Article.ReadLater}}Saved{{else}}Save{{end}}
+      </button>
+    </div>
+  </div>
+  
+  <div class="article-content">
+    {{.Article.Content}}
+  </div>
+  
+  <div class="reader-footer">
+    <a href="{{.Article.URL}}" target="_blank" rel="noopener">
+      Read original at {{if .Article.FeedName}}{{.Article.FeedName}}{{else}}source{{end}} →
+    </a>
+  </div>
+</div>
+
+<script>
+function markRead(id) {
+  fetch('/api/articles/' + id + '/read', { method: 'POST' })
+    .then(function(res) {
+      if (res.ok) {
+        window.location.href = '/';
+      }
+    });
+}
+
+function toggleSave(id) {
+  fetch('/api/articles/' + id + '/save', { method: 'POST' })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      var btn = document.querySelector('.action-btn.saved, .action-btn:nth-child(2)');
+      if (data.data.saved) {
+        btn.classList.add('saved');
+        btn.querySelector('svg').setAttribute('fill', 'currentColor');
+        btn.innerHTML = btn.innerHTML.replace('Save', 'Saved');
+      } else {
+        btn.classList.remove('saved');
+        btn.querySelector('svg').setAttribute('fill', 'none');
+        btn.innerHTML = btn.innerHTML.replace('Saved', 'Save');
+      }
+    });
+}
+</script>
+{{end}}

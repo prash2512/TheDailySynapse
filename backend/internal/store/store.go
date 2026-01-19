@@ -15,6 +15,7 @@ type FeedStore interface {
 	GetAllFeeds(ctx context.Context) ([]core.Feed, error)
 	GetFeedsToSync(ctx context.Context, limit int) ([]core.Feed, error)
 	UpdateFeedHeaders(ctx context.Context, id int64, etag, lastModified string, lastSyncedAt time.Time) error
+	UpdateFeedName(ctx context.Context, id int64, name string) error
 }
 
 type ArticleStore interface {
@@ -27,6 +28,10 @@ type ArticleStore interface {
 	GetArticleByID(ctx context.Context, id int64) (*core.Article, error)
 	GetArticlesByTags(ctx context.Context, tags []string, limit int) ([]core.Article, error)
 	GetAllTags(ctx context.Context) ([]core.TagCount, error)
+	GetArticleTags(ctx context.Context, articleID int64) ([]string, error)
+	MarkArticleRead(ctx context.Context, id int64) error
+	ToggleArticleSaved(ctx context.Context, id int64) (bool, error)
+	GetSavedArticles(ctx context.Context) ([]core.Article, error)
 }
 
 type Store interface {
