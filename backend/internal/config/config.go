@@ -46,7 +46,7 @@ func Load() *Config {
 		RetentionDays:      getIntEnv("RETENTION_DAYS", 30),
 		HTTPTimeout:        getDurationEnv("HTTP_TIMEOUT", 10*time.Second),
 
-		JudgeInterval:    getDurationEnv("JUDGE_INTERVAL", 4*time.Second),
+		JudgeInterval:    getDurationEnv("JUDGE_INTERVAL", 6*time.Second),
 		MaxContentLength: getIntEnv("MAX_CONTENT_LENGTH", 20000),
 	}
 }
