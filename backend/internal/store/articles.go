@@ -94,7 +94,7 @@ func (q *Queries) GetUnscoredArticles(ctx context.Context, limit int) ([]core.Ar
 	var articles []core.Article
 	for rows.Next() {
 		var a core.Article
-		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt, &a.Content); err != nil {
+		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt, &a.Summary); err != nil {
 			return nil, fmt.Errorf("scanning article: %w", err)
 		}
 		articles = append(articles, a)
@@ -192,7 +192,7 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 	query := `
 		SELECT a.id, a.feed_id, a.title, a.url, a.published_at,
 		       a.quality_rank, a.summary, a.justification,
-		       a.summary, f.name as feed_name, a.is_read, a.read_later
+		       f.name as feed_name, a.is_read, a.read_later
 		FROM articles a
 		JOIN feeds f ON a.feed_id = f.id
 		WHERE a.id = ?
@@ -202,7 +202,7 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 	err := q.db.QueryRowContext(ctx, query, id).Scan(
 		&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
 		&a.QualityRank, &a.Summary, &a.Justification,
-		&a.Content, &feedName, &a.IsRead, &a.ReadLater,
+		&feedName, &a.IsRead, &a.ReadLater,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -376,9 +376,6 @@ func (q *Queries) DeleteArticle(ctx context.Context, id int64) error {
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM article_tags WHERE article_id = ?`, id); err != nil {
 		return fmt.Errorf("deleting article tags: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM article_content WHERE article_id = ?`, id); err != nil {
-		return fmt.Errorf("deleting article content: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM articles WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("deleting article: %w", err)

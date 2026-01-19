@@ -58,7 +58,7 @@ func (w *Worker) processNextArticle(ctx context.Context) {
 	var result *judge.ScoreResult
 	err = retry.Do(ctx, 5, func() error {
 		var scoreErr error
-		result, scoreErr = w.scorer.Score(ctx, article.Title, article.Content)
+		result, scoreErr = w.scorer.Score(ctx, article.Title, article.Summary)
 		return scoreErr
 	})
 

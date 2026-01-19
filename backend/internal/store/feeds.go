@@ -33,13 +33,15 @@ func (q *Queries) CreateFeed(ctx context.Context, url string, name string) (core
 		return core.Feed{}, fmt.Errorf("getting last insert ID: %w", err)
 	}
 
-	return core.Feed{
+	feed := core.Feed{
 		ID:           id,
 		URL:          url,
 		Name:         name,
 		Status:       "active",
 		LastSyncedAt: initialSyncTime,
-	}, nil
+	}
+
+	return feed, nil
 }
 
 func (q *Queries) DeleteFeed(ctx context.Context, id int64) error {
@@ -113,7 +115,7 @@ func (q *Queries) scanFeeds(rows *sql.Rows) ([]core.Feed, error) {
 		var etag, lastMod sql.NullString
 
 		if err := rows.Scan(&feed.ID, &feed.URL, &feed.Name, &feed.Status, &etag, &lastMod, &feed.LastSyncedAt); err != nil {
-			return nil, fmt.Errorf("scanning feed row: %w", err)
+			return nil, fmt.Errorf("could not scan feed row: %w", err)
 		}
 
 		feed.Etag = etag.String
@@ -122,14 +124,15 @@ func (q *Queries) scanFeeds(rows *sql.Rows) ([]core.Feed, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterating rows: %w", err)
+		return nil, fmt.Errorf("error during rows iteration: %w", err)
 	}
 
 	return feeds, nil
 }
 
 func (q *Queries) UpdateFeedHeaders(ctx context.Context, id int64, etag, lastModified string, lastSyncedAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, `UPDATE feeds SET etag = ?, last_modified = ?, last_synced_at = ? WHERE id = ?`, etag, lastModified, lastSyncedAt, id)
+	query := `UPDATE feeds SET etag = ?, last_modified = ?, last_synced_at = ? WHERE id = ?`
+	_, err := q.db.ExecContext(ctx, query, etag, lastModified, lastSyncedAt, id)
 	if err != nil {
 		return fmt.Errorf("updating feed headers: %w", err)
 	}
@@ -137,7 +140,8 @@ func (q *Queries) UpdateFeedHeaders(ctx context.Context, id int64, etag, lastMod
 }
 
 func (q *Queries) UpdateFeedName(ctx context.Context, id int64, name string) error {
-	_, err := q.db.ExecContext(ctx, `UPDATE feeds SET name = ? WHERE id = ? AND (name IS NULL OR name = '')`, name, id)
+	query := `UPDATE feeds SET name = ? WHERE id = ?`
+	_, err := q.db.ExecContext(ctx, query, name, id)
 	if err != nil {
 		return fmt.Errorf("updating feed name: %w", err)
 	}
