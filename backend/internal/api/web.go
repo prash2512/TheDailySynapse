@@ -82,6 +82,10 @@ func (s *Server) handleDailyPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	allTags, _ := s.store.GetAllTags(r.Context())
+	// Limit to top 15 most popular tags for better UX
+	if len(allTags) > 15 {
+		allTags = allTags[:15]
+	}
 
 	totalPages := (total + perPage - 1) / perPage
 	if totalPages < 1 {
@@ -130,6 +134,7 @@ func (s *Server) handleReaderPage(w http.ResponseWriter, r *http.Request) {
 	view := toArticleView(*article, tags)
 
 	data := map[string]any{
+		"Nav":     "daily",
 		"Title":   article.Title,
 		"Article": view,
 	}

@@ -14,11 +14,19 @@
       <input type="text" id="search" placeholder="Search articles..." oninput="filterArticles()">
     </div>
     {{if .Tags}}
-    <div class="topic-chips">
-      <button class="chip active" onclick="filterByTag('')">All</button>
-      {{range .Tags}}
-      <button class="chip" onclick="filterByTag('{{.Name}}')">{{.Name}} <span class="chip-count">{{.Count}}</span></button>
-      {{end}}
+    <div class="tags-section">
+      <button class="tags-toggle" onclick="toggleTags()" id="tagsToggle">
+        <span>Topics</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="tagsToggleIcon">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div class="topic-chips" id="topicChips" style="display: none;">
+        <button class="chip active" onclick="filterByTag('')">All</button>
+        {{range .Tags}}
+        <button class="chip" onclick="filterByTag('{{.Name}}')">{{.Name}} <span class="chip-count">{{.Count}}</span></button>
+        {{end}}
+      </div>
     </div>
     {{end}}
   </div>
@@ -46,19 +54,19 @@
       </div>
       {{end}}
       <div class="article-actions">
-        <button class="action-btn" onclick="markRead({{.ID}})" title="Mark as done">
+        <button class="action-btn" onclick="markRead({{.ID}}); event.stopPropagation();" title="Mark as done">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 6L9 17l-5-5"/>
           </svg>
           Done
         </button>
-        <button class="action-btn {{if .ReadLater}}saved{{end}}" onclick="toggleSave({{.ID}})" title="Save forever">
+        <button class="action-btn {{if .ReadLater}}saved{{end}}" onclick="toggleSave({{.ID}}); event.stopPropagation();" title="Save forever">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="{{if .ReadLater}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
           </svg>
           Save
         </button>
-        <button class="action-btn dismiss" onclick="dismissArticle({{.ID}})" title="Not interested">
+        <button class="action-btn dismiss" onclick="dismissArticle({{.ID}}); event.stopPropagation();" title="Not interested">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -99,6 +107,20 @@
 <script>
 var currentTag = '';
 var currentSearch = '';
+var tagsExpanded = false;
+
+function toggleTags() {
+  tagsExpanded = !tagsExpanded;
+  var chips = document.getElementById('topicChips');
+  var icon = document.getElementById('tagsToggleIcon');
+  if (tagsExpanded) {
+    chips.style.display = 'flex';
+    icon.style.transform = 'rotate(180deg)';
+  } else {
+    chips.style.display = 'none';
+    icon.style.transform = 'rotate(0deg)';
+  }
+}
 
 function filterArticles() {
   currentSearch = document.getElementById('search').value.toLowerCase();

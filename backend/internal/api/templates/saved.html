@@ -9,7 +9,7 @@
   <div class="articles">
     {{range .Articles}}
     <article class="article-card" data-id="{{.ID}}">
-      <h2><a href="/read/{{.ID}}">{{.Title}}</a></h2>
+      <h2><a href="{{.URL}}" target="_blank" rel="noopener">{{.Title}}</a></h2>
       {{if .Summary}}
       <p class="summary">{{.Summary}}</p>
       {{end}}
