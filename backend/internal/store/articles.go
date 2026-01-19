@@ -166,7 +166,6 @@ func (q *Queries) GetTopArticles(ctx context.Context, limit int) ([]core.Article
 		FROM articles a
 		JOIN feeds f ON a.feed_id = f.id
 		WHERE a.quality_rank IS NOT NULL
-		  AND a.published_at > datetime('now', '-7 days')
 		ORDER BY a.quality_rank DESC, a.published_at DESC
 		LIMIT ?
 	`
