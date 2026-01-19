@@ -56,17 +56,24 @@ func (w *Worker) processNextArticle(ctx context.Context) {
 	w.logger.Info("scoring article", slog.Int64("id", article.ID), slog.String("title", article.Title))
 
 	var result *judge.ScoreResult
-	err = retry.Do(ctx, 3, func() error {
+	err = retry.Do(ctx, 5, func() error {
 		var scoreErr error
 		result, scoreErr = w.scorer.Score(ctx, article.Title, article.Content)
 		return scoreErr
 	})
 
 	if err != nil {
-		w.logger.Error("failed to score article",
-			slog.Int64("id", article.ID),
-			slog.String("error", err.Error()),
-		)
+		if retry.IsRateLimitError(err) {
+			w.logger.Warn("rate limit hit, will retry later",
+				slog.Int64("id", article.ID),
+				slog.String("title", article.Title),
+			)
+		} else {
+			w.logger.Error("failed to score article",
+				slog.Int64("id", article.ID),
+				slog.String("error", err.Error()),
+			)
+		}
 		return
 	}
 
