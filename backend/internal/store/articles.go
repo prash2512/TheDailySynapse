@@ -159,20 +159,27 @@ func (q *Queries) UpdateArticleScore(ctx context.Context, id int64, rank int, su
 	return tx.Commit()
 }
 
-func (q *Queries) GetTopArticles(ctx context.Context, limit int) ([]core.Article, error) {
+func (q *Queries) GetTopArticles(ctx context.Context, limit, offset int) ([]core.Article, int, error) {
+	// Count total scored articles
+	var total int
+	err := q.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM articles WHERE quality_rank IS NOT NULL`).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("counting articles: %w", err)
+	}
+
 	query := `
 		SELECT a.id, a.feed_id, a.title, a.url, a.published_at, 
 		       a.quality_rank, a.summary, a.justification,
 		       f.name as feed_name, a.is_read, a.read_later
 		FROM articles a
 		JOIN feeds f ON a.feed_id = f.id
-		WHERE a.quality_rank IS NOT NULL AND a.is_read = 0
-		ORDER BY a.quality_rank DESC, a.published_at DESC
-		LIMIT ?
+		WHERE a.quality_rank IS NOT NULL
+		ORDER BY a.is_read ASC, a.quality_rank DESC, a.published_at DESC
+		LIMIT ? OFFSET ?
 	`
-	rows, err := q.db.QueryContext(ctx, query, limit)
+	rows, err := q.db.QueryContext(ctx, query, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("querying top articles: %w", err)
+		return nil, 0, fmt.Errorf("querying top articles: %w", err)
 	}
 	defer rows.Close()
 
@@ -182,12 +189,12 @@ func (q *Queries) GetTopArticles(ctx context.Context, limit int) ([]core.Article
 		var feedName string
 		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
 			&a.QualityRank, &a.Summary, &a.Justification, &feedName, &a.IsRead, &a.ReadLater); err != nil {
-			return nil, fmt.Errorf("scanning article: %w", err)
+			return nil, 0, fmt.Errorf("scanning article: %w", err)
 		}
 		a.FeedName = feedName
 		articles = append(articles, a)
 	}
-	return articles, nil
+	return articles, total, nil
 }
 
 func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, error) {
@@ -219,7 +226,8 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 
 func (q *Queries) GetArticlesByTags(ctx context.Context, tags []string, limit int) ([]core.Article, error) {
 	if len(tags) == 0 {
-		return q.GetTopArticles(ctx, limit)
+		articles, _, err := q.GetTopArticles(ctx, limit, 0)
+		return articles, err
 	}
 
 	placeholders := make([]string, len(tags))

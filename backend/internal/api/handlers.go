@@ -80,19 +80,43 @@ func (s *Server) handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetDaily(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
-	limit := 5
+	limit := 20
 	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 20 {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
 			limit = l
 		}
 	}
 
-	articles, err := s.store.GetTopArticles(r.Context(), limit)
+	offsetStr := r.URL.Query().Get("offset")
+	offset := 0
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	articles, total, err := s.store.GetTopArticles(r.Context(), limit, offset)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to fetch articles: %v", err))
 		return
 	}
-	JSON(w, http.StatusOK, articles)
+	JSON(w, http.StatusOK, map[string]any{"articles": articles, "total": total, "limit": limit, "offset": offset})
+}
+
+func (s *Server) handleDismissArticle(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "invalid article id")
+		return
+	}
+
+	if err := s.store.DeleteArticle(r.Context(), id); err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to dismiss: %v", err))
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "article dismissed"})
 }
 
 func (s *Server) handleGetArticle(w http.ResponseWriter, r *http.Request) {

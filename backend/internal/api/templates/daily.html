@@ -2,7 +2,7 @@
 <div class="container">
   <div class="hero">
     <h1>Your Daily Read</h1>
-    <p>{{.Date}} — Top unread articles curated for you</p>
+    <p>{{.Date}} — {{.Total}} articles curated for you</p>
   </div>
   
   <div class="filters">
@@ -26,7 +26,7 @@
   {{if .Articles}}
   <div class="articles" id="articles">
     {{range .Articles}}
-    <article class="article-card" data-id="{{.ID}}" data-title="{{.Title}}" data-summary="{{.Summary}}" data-tags="{{range .Tags}}{{.}} {{end}}">
+    <article class="article-card{{if .IsRead}} read{{end}}" data-id="{{.ID}}" data-title="{{.Title}}" data-summary="{{.Summary}}" data-tags="{{range .Tags}}{{.}} {{end}}">
       <h2><a href="/read/{{.ID}}">{{.Title}}</a></h2>
       {{if .Summary}}
       <p class="summary">{{.Summary}}</p>
@@ -46,7 +46,7 @@
       </div>
       {{end}}
       <div class="article-actions">
-        <button class="action-btn" onclick="markRead({{.ID}})" title="Mark as read">
+        <button class="action-btn" onclick="markRead({{.ID}})" title="Mark as done">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 6L9 17l-5-5"/>
           </svg>
@@ -58,17 +58,40 @@
           </svg>
           Save
         </button>
+        <button class="action-btn dismiss" onclick="dismissArticle({{.ID}})" title="Not interested">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
       </div>
     </article>
     {{end}}
   </div>
+  
+  {{if gt .TotalPages 1}}
+  <div class="pagination">
+    {{if .HasPrev}}
+    <a href="/?page={{.PrevPage}}" class="page-btn">&larr; Prev</a>
+    {{else}}
+    <span class="page-btn disabled">&larr; Prev</span>
+    {{end}}
+    <span class="page-info">Page {{.Page}} of {{.TotalPages}}</span>
+    {{if .HasNext}}
+    <a href="/?page={{.NextPage}}" class="page-btn">Next &rarr;</a>
+    {{else}}
+    <span class="page-btn disabled">Next &rarr;</span>
+    {{end}}
+  </div>
+  {{end}}
+  
   <div class="empty-state" id="no-results" style="display: none;">
     <p>No articles match your search.</p>
   </div>
   {{else}}
   <div class="empty-state">
-    <p>No unread articles. Check back later or add more feeds!</p>
-    <a href="/feeds" class="btn btn-primary">Add Feeds</a>
+    <p>No scored articles yet. The LLM is processing your feeds...</p>
+    <a href="/feeds" class="btn btn-primary">Manage Feeds</a>
   </div>
   {{end}}
 </div>
@@ -147,6 +170,21 @@ function toggleSave(id) {
         } else {
           btn.classList.remove('saved');
           btn.querySelector('svg').setAttribute('fill', 'none');
+        }
+      }
+    });
+}
+
+function dismissArticle(id) {
+  if (!confirm('Remove this article permanently?')) return;
+  fetch('/api/articles/' + id, { method: 'DELETE' })
+    .then(function(res) {
+      if (res.ok) {
+        var el = document.querySelector('[data-id="' + id + '"]');
+        if (el) {
+          el.style.opacity = '0';
+          el.style.transform = 'translateX(-20px)';
+          setTimeout(function() { el.remove(); }, 200);
         }
       }
     });

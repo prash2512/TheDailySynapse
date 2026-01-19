@@ -169,6 +169,15 @@ nav a.active {
   background: var(--bg-tertiary);
 }
 
+.article-card.read {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.article-card.read:hover {
+  opacity: 0.8;
+}
+
 .article-card h2 {
   font-family: var(--font-serif);
   font-size: 1.5rem;
@@ -722,5 +731,56 @@ nav a.active {
 
 .reader-footer a:hover {
   color: var(--text-primary);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 0;
+  margin-bottom: 32px;
+}
+
+.page-btn {
+  padding: 10px 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.page-btn:hover:not(.disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.page-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-info {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.action-btn.dismiss {
+  padding: 8px 10px;
+  color: var(--text-muted);
+}
+
+.action-btn.dismiss:hover {
+  color: var(--danger);
+  background: rgba(248, 81, 73, 0.1);
+  border-color: var(--danger);
+}
+
+.article-card {
+  transition: all 0.2s ease;
 }
 

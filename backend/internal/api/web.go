@@ -57,7 +57,18 @@ func renderPage(w http.ResponseWriter, page string, data any) error {
 }
 
 func (s *Server) handleDailyPage(w http.ResponseWriter, r *http.Request) {
-	articles, err := s.store.GetTopArticles(r.Context(), 50)
+	pageStr := r.URL.Query().Get("page")
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	perPage := 20
+	offset := (page - 1) * perPage
+
+	articles, total, err := s.store.GetTopArticles(r.Context(), perPage, offset)
 	if err != nil {
 		s.logger.Error("failed to get articles", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -72,11 +83,23 @@ func (s *Server) handleDailyPage(w http.ResponseWriter, r *http.Request) {
 
 	allTags, _ := s.store.GetAllTags(r.Context())
 
+	totalPages := (total + perPage - 1) / perPage
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
 	data := map[string]any{
-		"Nav":      "daily",
-		"Date":     time.Now().Format("Monday, January 2"),
-		"Articles": views,
-		"Tags":     allTags,
+		"Nav":        "daily",
+		"Date":       time.Now().Format("Monday, January 2"),
+		"Articles":   views,
+		"Tags":       allTags,
+		"Page":       page,
+		"TotalPages": totalPages,
+		"Total":      total,
+		"HasPrev":    page > 1,
+		"HasNext":    page < totalPages,
+		"PrevPage":   page - 1,
+		"NextPage":   page + 1,
 	}
 
 	if err := renderPage(w, "daily", data); err != nil {
