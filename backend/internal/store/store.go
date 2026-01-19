@@ -25,6 +25,8 @@ type ArticleStore interface {
 	UpdateArticleScore(ctx context.Context, id int64, rank int, summary, justification, model string, tags []string) error
 	GetTopArticles(ctx context.Context, limit int) ([]core.Article, error)
 	GetArticleByID(ctx context.Context, id int64) (*core.Article, error)
+	GetArticlesByTags(ctx context.Context, tags []string, limit int) ([]core.Article, error)
+	GetAllTags(ctx context.Context) ([]core.TagCount, error)
 }
 
 type Store interface {

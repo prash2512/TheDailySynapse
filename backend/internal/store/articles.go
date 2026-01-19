@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"dailysynapse/backend/internal/core"
@@ -214,4 +215,78 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 	}
 	a.FeedName = feedName
 	return &a, nil
+}
+
+func (q *Queries) GetArticlesByTags(ctx context.Context, tags []string, limit int) ([]core.Article, error) {
+	if len(tags) == 0 {
+		return q.GetTopArticles(ctx, limit)
+	}
+
+	placeholders := make([]string, len(tags))
+	args := make([]any, len(tags)+1)
+	for i, tag := range tags {
+		placeholders[i] = "?"
+		args[i] = tag
+	}
+	args[len(tags)] = limit
+
+	query := fmt.Sprintf(`
+		SELECT DISTINCT a.id, a.feed_id, a.title, a.url, a.published_at,
+		       a.quality_rank, a.summary, a.justification,
+		       f.name as feed_name
+		FROM articles a
+		JOIN feeds f ON a.feed_id = f.id
+		JOIN article_tags at ON a.id = at.article_id
+		JOIN tags t ON at.tag_id = t.id
+		WHERE a.quality_rank IS NOT NULL
+		  AND t.name IN (%s)
+		ORDER BY a.quality_rank DESC, a.published_at DESC
+		LIMIT ?
+	`, strings.Join(placeholders, ","))
+
+	rows, err := q.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying articles by tags: %w", err)
+	}
+	defer rows.Close()
+
+	var articles []core.Article
+	for rows.Next() {
+		var a core.Article
+		var feedName string
+		if err := rows.Scan(&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
+			&a.QualityRank, &a.Summary, &a.Justification, &feedName); err != nil {
+			return nil, fmt.Errorf("scanning article: %w", err)
+		}
+		a.FeedName = feedName
+		articles = append(articles, a)
+	}
+	return articles, nil
+}
+
+func (q *Queries) GetAllTags(ctx context.Context) ([]core.TagCount, error) {
+	query := `
+		SELECT t.name, COUNT(at.article_id) as count
+		FROM tags t
+		JOIN article_tags at ON t.id = at.tag_id
+		JOIN articles a ON at.article_id = a.id
+		WHERE a.quality_rank IS NOT NULL
+		GROUP BY t.name
+		ORDER BY count DESC, t.name ASC
+	`
+	rows, err := q.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("querying tags: %w", err)
+	}
+	defer rows.Close()
+
+	var tags []core.TagCount
+	for rows.Next() {
+		var t core.TagCount
+		if err := rows.Scan(&t.Name, &t.Count); err != nil {
+			return nil, fmt.Errorf("scanning tag: %w", err)
+		}
+		tags = append(tags, t)
+	}
+	return tags, nil
 }

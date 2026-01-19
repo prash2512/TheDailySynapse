@@ -36,7 +36,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/feeds", s.handleCreateFeed)
 	mux.HandleFunc("DELETE /api/feeds/{id}", s.handleDeleteFeed)
 	mux.HandleFunc("GET /api/daily", s.handleGetDaily)
+	mux.HandleFunc("GET /api/articles", s.handleGetArticles)
 	mux.HandleFunc("GET /api/articles/{id}", s.handleGetArticle)
+	mux.HandleFunc("GET /api/tags", s.handleGetTags)
 
 	return chain(mux,
 		corsMiddleware,

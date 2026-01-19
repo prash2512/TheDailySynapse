@@ -33,6 +33,11 @@ type Tag struct {
 	Name string
 }
 
+type TagCount struct {
+	Name  string
+	Count int
+}
+
 type ArticleTag struct {
 	ArticleID int64
 	TagID     int64

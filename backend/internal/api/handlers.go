@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"dailysynapse/backend/internal/core"
 )
@@ -113,4 +114,41 @@ func (s *Server) handleGetArticle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, article)
+}
+
+func (s *Server) handleGetArticles(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	tagsParam := r.URL.Query().Get("tags")
+	var tags []string
+	if tagsParam != "" {
+		for _, t := range strings.Split(tagsParam, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				tags = append(tags, t)
+			}
+		}
+	}
+
+	articles, err := s.store.GetArticlesByTags(r.Context(), tags, limit)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to fetch articles: %v", err))
+		return
+	}
+	JSON(w, http.StatusOK, articles)
+}
+
+func (s *Server) handleGetTags(w http.ResponseWriter, r *http.Request) {
+	tags, err := s.store.GetAllTags(r.Context())
+	if err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to fetch tags: %v", err))
+		return
+	}
+	JSON(w, http.StatusOK, tags)
 }
