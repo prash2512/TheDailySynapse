@@ -7,3 +7,6 @@ DESIGN.md
 PROGRESS.md
 DECISIONS.md
 .env
+
+synapse.db-shm
+synapse.db-wal
