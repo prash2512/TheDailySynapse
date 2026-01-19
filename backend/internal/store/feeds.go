@@ -87,7 +87,7 @@ func (q *Queries) GetFeedsPendingDeletion(ctx context.Context) ([]core.Feed, err
 }
 
 func (q *Queries) GetAllFeeds(ctx context.Context) ([]core.Feed, error) {
-	rows, err := q.db.QueryContext(ctx, "SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds ORDER BY name")
+	rows, err := q.db.QueryContext(ctx, "SELECT id, url, name, status, etag, last_modified, last_synced_at FROM feeds WHERE status != 'pending_deletion' ORDER BY name")
 	if err != nil {
 		return nil, fmt.Errorf("querying feeds: %w", err)
 	}
