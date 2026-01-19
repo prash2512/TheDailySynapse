@@ -11,18 +11,16 @@ import (
 	"dailysynapse/backend/internal/config"
 	"dailysynapse/backend/internal/core"
 	"dailysynapse/backend/internal/store"
-	"dailysynapse/backend/pkg/readability"
 
 	"github.com/mmcdole/gofeed"
 )
 
 type Syncer struct {
-	store     store.Store
-	extractor readability.Extractor
-	fp        *gofeed.Parser
-	feedChan  chan core.Feed
-	cfg       *config.Config
-	logger    *slog.Logger
+	store    store.Store
+	fp       *gofeed.Parser
+	feedChan chan core.Feed
+	cfg      *config.Config
+	logger   *slog.Logger
 }
 
 func New(s store.Store, cfg *config.Config, logger *slog.Logger) *Syncer {
@@ -30,12 +28,11 @@ func New(s store.Store, cfg *config.Config, logger *slog.Logger) *Syncer {
 	fp.Client = &http.Client{Timeout: cfg.HTTPTimeout}
 
 	return &Syncer{
-		store:     s,
-		extractor: readability.NewExtractor(cfg.HTTPTimeout),
-		fp:        fp,
-		feedChan:  make(chan core.Feed, 100),
-		cfg:       cfg,
-		logger:    logger,
+		store:    s,
+		fp:       fp,
+		feedChan: make(chan core.Feed, 100),
+		cfg:      cfg,
+		logger:   logger,
 	}
 }
 
@@ -193,23 +190,29 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 			continue
 		}
 
-		article := core.Article{
-			FeedID:      feed.ID,
-			Title:       item.Title,
-			URL:         item.Link,
-			PublishedAt: *published,
-			Summary:     item.Description,
+		// Use RSS description for scoring - no full page extraction needed
+		description := item.Description
+		if description == "" && item.Content != "" {
+			description = item.Content // Some feeds put content here
 		}
 
-		content, err := s.extractor.Extract(ctx, item.Link)
-		if err != nil || content == "" {
-			s.logger.Warn("skipping article, no content",
+		// Skip articles with no description at all
+		if len(description) < 50 {
+			s.logger.Debug("skipping article, insufficient description",
 				slog.String("url", item.Link),
 				slog.String("title", item.Title),
 			)
 			continue
 		}
-		article.Content = content
+
+		article := core.Article{
+			FeedID:      feed.ID,
+			Title:       item.Title,
+			URL:         item.Link,
+			PublishedAt: *published,
+			Summary:     description,
+			Content:     description, // Use description for scoring
+		}
 
 		if _, err := s.store.CreateArticle(ctx, article); err != nil {
 			s.logger.Error("failed to save article",

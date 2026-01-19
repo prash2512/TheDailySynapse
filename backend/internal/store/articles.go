@@ -48,12 +48,6 @@ func (q *Queries) CreateArticle(ctx context.Context, article core.Article) (int6
 		return 0, fmt.Errorf("getting last insert id: %w", err)
 	}
 
-	queryContent := `INSERT INTO article_content (article_id, content, judge_model) VALUES (?, ?, ?)`
-	_, err = tx.ExecContext(ctx, queryContent, id, article.Content, article.JudgeModel)
-	if err != nil {
-		return 0, fmt.Errorf("executing create article content: %w", err)
-	}
-
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("committing transaction: %w", err)
 	}
@@ -83,10 +77,11 @@ func (q *Queries) DeleteArticlesByFeedID(ctx context.Context, feedID int64) erro
 
 func (q *Queries) GetUnscoredArticles(ctx context.Context, limit int) ([]core.Article, error) {
 	query := `
-		SELECT a.id, a.feed_id, a.title, a.url, a.published_at, ac.content
+		SELECT a.id, a.feed_id, a.title, a.url, a.published_at, a.summary
 		FROM articles a
-		JOIN article_content ac ON a.id = ac.article_id
 		WHERE a.quality_rank IS NULL
+		  AND a.summary IS NOT NULL
+		  AND length(a.summary) > 50
 		ORDER BY a.published_at DESC
 		LIMIT ?
 	`
@@ -121,10 +116,6 @@ func (q *Queries) UpdateArticleScore(ctx context.Context, id int64, rank int, su
 	`
 	if _, err := tx.ExecContext(ctx, query, rank, summary, justification, id); err != nil {
 		return fmt.Errorf("updating article score: %w", err)
-	}
-
-	if _, err := tx.ExecContext(ctx, `UPDATE article_content SET judge_model = ? WHERE article_id = ?`, model, id); err != nil {
-		return fmt.Errorf("updating judge model: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM article_tags WHERE article_id = ?`, id); err != nil {
@@ -201,9 +192,8 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 	query := `
 		SELECT a.id, a.feed_id, a.title, a.url, a.published_at,
 		       a.quality_rank, a.summary, a.justification,
-		       ac.content, f.name as feed_name, a.is_read, a.read_later
+		       a.summary, f.name as feed_name, a.is_read, a.read_later
 		FROM articles a
-		JOIN article_content ac ON a.id = ac.article_id
 		JOIN feeds f ON a.feed_id = f.id
 		WHERE a.id = ?
 	`
