@@ -30,6 +30,7 @@ type ArticleStore interface {
 	GetAllTags(ctx context.Context) ([]core.TagCount, error)
 	GetArticleTags(ctx context.Context, articleID int64) ([]string, error)
 	MarkArticleRead(ctx context.Context, id int64) error
+	MarkArticleUnread(ctx context.Context, id int64) error
 	ToggleArticleSaved(ctx context.Context, id int64) (bool, error)
 	GetSavedArticles(ctx context.Context) ([]core.Article, error)
 	DeleteArticle(ctx context.Context, id int64) error

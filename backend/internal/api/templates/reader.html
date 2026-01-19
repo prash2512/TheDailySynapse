@@ -42,12 +42,22 @@
         </svg>
         Read on Original Site
       </button>
+      {{if .Article.IsRead}}
+      <button class="action-btn" onclick="markUnread({{.Article.ID}})" title="Mark as unread">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 8v8M8 12h8"/>
+        </svg>
+        Unread
+      </button>
+      {{else}}
       <button class="action-btn" onclick="markRead({{.Article.ID}})" title="Mark as done">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M20 6L9 17l-5-5"/>
         </svg>
         Done
       </button>
+      {{end}}
       <button class="action-btn {{if .Article.ReadLater}}saved{{end}}" onclick="toggleSave({{.Article.ID}})" title="Save forever">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="{{if .Article.ReadLater}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2">
           <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
@@ -77,6 +87,15 @@ function openArticle(url) {
 
 function markRead(id) {
   fetch('/api/articles/' + id + '/read', { method: 'POST' })
+    .then(function(res) {
+      if (res.ok) {
+        window.location.href = '/';
+      }
+    });
+}
+
+function markUnread(id) {
+  fetch('/api/articles/' + id + '/unread', { method: 'POST' })
     .then(function(res) {
       if (res.ok) {
         window.location.href = '/';

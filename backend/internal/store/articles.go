@@ -322,6 +322,14 @@ func (q *Queries) MarkArticleRead(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (q *Queries) MarkArticleUnread(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, `UPDATE articles SET is_read = 0 WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("marking article unread: %w", err)
+	}
+	return nil
+}
+
 func (q *Queries) ToggleArticleSaved(ctx context.Context, id int64) (bool, error) {
 	var currentState bool
 	err := q.db.QueryRowContext(ctx, `SELECT read_later FROM articles WHERE id = ?`, id).Scan(&currentState)

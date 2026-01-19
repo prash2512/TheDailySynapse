@@ -52,6 +52,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/articles", s.handleGetArticles)
 	mux.HandleFunc("GET /api/articles/{id}", s.handleGetArticle)
 	mux.HandleFunc("POST /api/articles/{id}/read", s.handleMarkRead)
+	mux.HandleFunc("POST /api/articles/{id}/unread", s.handleMarkUnread)
 	mux.HandleFunc("POST /api/articles/{id}/save", s.handleToggleSaved)
 	mux.HandleFunc("DELETE /api/articles/{id}", s.handleDismissArticle)
 	mux.HandleFunc("GET /api/saved", s.handleGetSaved)

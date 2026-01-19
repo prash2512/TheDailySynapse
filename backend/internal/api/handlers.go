@@ -193,6 +193,22 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]string{"message": "marked as read"})
 }
 
+func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "invalid article id")
+		return
+	}
+
+	if err := s.store.MarkArticleUnread(r.Context(), id); err != nil {
+		Error(w, http.StatusInternalServerError, fmt.Sprintf("failed to mark unread: %v", err))
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "marked as unread"})
+}
+
 func (s *Server) handleToggleSaved(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
