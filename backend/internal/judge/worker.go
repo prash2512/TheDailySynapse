@@ -70,7 +70,7 @@ func (w *Worker) processNextArticle(ctx context.Context) {
 		return
 	}
 
-	if result.TotalScore < 30 {
+	if result.TotalScore < 50 {
 		if err := w.store.DeleteArticle(ctx, article.ID); err != nil {
 			w.logger.Error("failed to delete low-score article",
 				slog.Int64("id", article.ID),
