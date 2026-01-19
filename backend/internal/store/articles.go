@@ -368,3 +368,23 @@ func (q *Queries) GetSavedArticles(ctx context.Context) ([]core.Article, error) 
 	}
 	return articles, nil
 }
+
+func (q *Queries) DeleteArticle(ctx context.Context, id int64) error {
+	tx, err := q.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM article_tags WHERE article_id = ?`, id); err != nil {
+		return fmt.Errorf("deleting article tags: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM article_content WHERE article_id = ?`, id); err != nil {
+		return fmt.Errorf("deleting article content: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM articles WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("deleting article: %w", err)
+	}
+
+	return tx.Commit()
+}

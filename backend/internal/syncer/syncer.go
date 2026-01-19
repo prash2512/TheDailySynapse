@@ -202,14 +202,14 @@ func (s *Syncer) syncFeed(ctx context.Context, feed core.Feed) error {
 		}
 
 		content, err := s.extractor.Extract(ctx, item.Link)
-		if err != nil {
-			s.logger.Warn("content extraction failed",
+		if err != nil || content == "" {
+			s.logger.Warn("skipping article, no content",
 				slog.String("url", item.Link),
-				slog.String("error", err.Error()),
+				slog.String("title", item.Title),
 			)
-		} else {
-			article.Content = content
+			continue
 		}
+		article.Content = content
 
 		if _, err := s.store.CreateArticle(ctx, article); err != nil {
 			s.logger.Error("failed to save article",
