@@ -57,7 +57,7 @@ func renderPage(w http.ResponseWriter, page string, data any) error {
 }
 
 func (s *Server) handleDailyPage(w http.ResponseWriter, r *http.Request) {
-	articles, err := s.store.GetTopArticles(r.Context(), 10)
+	articles, err := s.store.GetTopArticles(r.Context(), 50)
 	if err != nil {
 		s.logger.Error("failed to get articles", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -70,10 +70,13 @@ func (s *Server) handleDailyPage(w http.ResponseWriter, r *http.Request) {
 		views = append(views, toArticleView(a, tags))
 	}
 
+	allTags, _ := s.store.GetAllTags(r.Context())
+
 	data := map[string]any{
 		"Nav":      "daily",
 		"Date":     time.Now().Format("Monday, January 2"),
 		"Articles": views,
+		"Tags":     allTags,
 	}
 
 	if err := renderPage(w, "daily", data); err != nil {

@@ -8,5 +8,6 @@ PROGRESS.md
 DECISIONS.md
 .env
 
+# SQLite WAL files
 synapse.db-shm
 synapse.db-wal
