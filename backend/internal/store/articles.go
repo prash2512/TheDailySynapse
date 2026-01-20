@@ -199,11 +199,22 @@ func (q *Queries) GetArticleByID(ctx context.Context, id int64) (*core.Article, 
 	`
 	var a core.Article
 	var feedName string
+	var qualityRank sql.NullInt64
+	var justification sql.NullString
 	err := q.db.QueryRowContext(ctx, query, id).Scan(
 		&a.ID, &a.FeedID, &a.Title, &a.URL, &a.PublishedAt,
-		&a.QualityRank, &a.Summary, &a.Justification,
+		&qualityRank, &a.Summary, &justification,
 		&feedName, &a.IsRead, &a.ReadLater,
 	)
+	if err == nil {
+		if qualityRank.Valid {
+			a.QualityRank = int(qualityRank.Int64)
+		}
+		if justification.Valid {
+			a.Justification = justification.String
+		}
+		a.FeedName = feedName
+	}
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, core.ErrNotFound
